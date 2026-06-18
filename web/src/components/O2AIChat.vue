@@ -1356,9 +1356,8 @@ import {
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { useTypewriterPlaceholder } from "@/components/ai-assistant/welcome/useTypewriterPlaceholder";
-import hljs from "highlight.js";
-import "highlight.js/styles/github.css";
-import "highlight.js/styles/github-dark.css";
+// highlight.js (~947KB) is loaded lazily — see ensureHljs() below. It is kept
+// off the home page's initial critical path and warmed during idle.
 import { marked } from "marked";
 import { MarkedOptions } from "marked";
 import DOMPurify from "dompurify";
@@ -1405,8 +1404,31 @@ import { UNAUTHORIZED_MESSAGE, isAuthError } from "@/utils/authErrors";
 const { fetchAiChat, submitFeedback } = useAiChat();
 const { emit: emitDashboardEvent } = useAiDashboardEvents();
 
-// Register VRL as a JavaScript alias (type assertion)
-hljs.registerLanguage("vrl", () => hljs.getLanguage("javascript") as any);
+// highlight.js is loaded lazily to keep it off the initial critical path.
+// Until it is ready, code renders as plain (escaped) text; once loaded, bumping
+// hljsVersion triggers a reactive re-render so existing code blocks highlight.
+let hljs: any = null;
+const hljsVersion = ref(0);
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const ensureHljs = async () => {
+  if (hljs) return hljs;
+  const [{ default: hl }] = await Promise.all([
+    import("highlight.js"),
+    import("highlight.js/styles/github.css"),
+    import("highlight.js/styles/github-dark.css"),
+  ]);
+  // Register VRL as a JavaScript alias (type assertion)
+  hl.registerLanguage("vrl", () => hl.getLanguage("javascript") as any);
+  hljs = hl;
+  hljsVersion.value++;
+  return hl;
+};
 
 // Configure marked options with custom language support
 const markedOptions = {
@@ -1417,6 +1439,7 @@ const markedOptions = {
   mangle: false,
   sanitize: false, // Allow HTML in markdown
   highlight: (code: string, lang: string) => {
+    if (!hljs) return escapeHtml(code);
     if (lang === "vrl") {
       return hljs.highlight(code, { language: "javascript" }).value;
     }
@@ -1431,6 +1454,7 @@ marked.setOptions(markedOptions);
 
 // Function to render markdown content
 function renderMarkdown(content: any) {
+  hljsVersion.value; // reactive dep: re-render once highlight.js finishes loading
   return marked.parse(content);
 }
 
@@ -4938,6 +4962,17 @@ export default defineComponent({
 
     // Only fetch initial message if component starts as open
     onMounted(() => {
+      // Warm highlight.js off the critical path so it's ready before any code
+      // block needs highlighting, without blocking initial render.
+      const warmHljs = () => {
+        ensureHljs().catch(() => {});
+      };
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(warmHljs, { timeout: 2000 });
+      } else {
+        setTimeout(warmHljs, 200);
+      }
+
       if (props.isOpen) {
         fetchInitialMessage();
         loadHistory(); // Load history on mount if chat is open
@@ -5079,8 +5114,10 @@ export default defineComponent({
             codeText = codeText.split("\n").slice(1).join("\n").trim();
           }
 
-          const highlightedContent =
-            token.lang && hljs.getLanguage(token.lang)
+          hljsVersion.value; // reactive dep: re-highlight once highlight.js loads
+          const highlightedContent = !hljs
+            ? DOMPurify.sanitize(escapeHtml(codeText))
+            : token.lang && hljs.getLanguage(token.lang)
               ? DOMPurify.sanitize(
                   hljs.highlight(codeText, { language: token.lang }).value,
                 )
@@ -5121,8 +5158,10 @@ export default defineComponent({
             codeText = codeText.split("\n").slice(1).join("\n").trim();
           }
 
-          const highlightedContent =
-            token.lang && hljs.getLanguage(token.lang)
+          hljsVersion.value; // reactive dep: re-highlight once highlight.js loads
+          const highlightedContent = !hljs
+            ? DOMPurify.sanitize(escapeHtml(codeText))
+            : token.lang && hljs.getLanguage(token.lang)
               ? DOMPurify.sanitize(
                   hljs.highlight(codeText, { language: token.lang }).value,
                 )

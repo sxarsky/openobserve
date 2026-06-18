@@ -101,6 +101,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import {
   computed,
   defineComponent,
+  defineAsyncComponent,
   ref,
   watch,
   onMounted,
@@ -109,8 +110,10 @@ import {
 import { useI18n } from "vue-i18n";
 import { useStore } from "vuex";
 import config from "../aws-exports";
-import OverviewTab from "@/views/OverviewTab.vue";
-import UsageTab from "@/views/UsageTab.vue";
+// Overview/Usage tabs pull in echarts (~1MB). They are not the default tab, so
+// load them lazily — echarts stays off the home page's initial critical path.
+const OverviewTab = defineAsyncComponent(() => import("@/views/OverviewTab.vue"));
+const UsageTab = defineAsyncComponent(() => import("@/views/UsageTab.vue"));
 import O2AIChat from "@/components/O2AIChat.vue";
 import HomeChatHistory from "@/views/HomeChatHistory.vue";
 import OTabs from "@/lib/navigation/Tabs/OTabs.vue";

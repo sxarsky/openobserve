@@ -106,7 +106,9 @@ import Vercel from "@/components/ingestion/others/Vercel.vue";
 import Heroku from "@/components/ingestion/others/Heroku.vue";
 
 import AIIntegrations from "@/components/ingestion/AIIntegrations.vue";
-import AIIntegrationDetail from "@/components/ingestion/ai/AIIntegrationDetail.vue";
+// Lazy — its OCodeBlock pulls highlight.js (~947KB); keep it off the entry chunk.
+const AIIntegrationDetail = () =>
+  import("@/components/ingestion/ai/AIIntegrationDetail.vue");
 import { aiCategories } from "@/components/ingestion/ai/data";
 
 const useIngestionRoutes = () => {

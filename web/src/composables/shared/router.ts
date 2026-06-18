@@ -20,8 +20,6 @@ import {
   invalidateLoginData,
 } from "@/utils/zincutils";
 import config from "@/aws-exports";
-import Home from "@/views/HomeView.vue";
-import ImportDashboard from "@/views/Dashboards/ImportDashboard.vue";
 import About from "@/views/About.vue";
 import MemberSubscription from "@/views/MemberSubscription.vue";
 import Error404 from "@/views/Error404.vue";
@@ -115,7 +113,7 @@ const useRoutes = () => {
     {
       path: "",
       name: "home",
-      component: Home,
+      component: () => import("@/views/HomeView.vue"),
       meta: {
         keepAlive: true,
         title: "Home",
@@ -278,7 +276,7 @@ const useRoutes = () => {
     {
       path: "/dashboards/import",
       name: "importDashboard",
-      component: ImportDashboard,
+      component: () => import("@/views/Dashboards/ImportDashboard.vue"),
       props: true,
       meta: {
         title: "Import Dashboard",

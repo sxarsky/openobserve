@@ -17,7 +17,7 @@ import { createApp } from "vue";
 import store from "./stores";
 import App from "./App.vue";
 import createRouter from "./router";
-import i18n from "./locales";
+import i18n, { getLocale, loadLocaleMessages } from "./locales";
 import "./styles/tailwind.css";
 import config from "./aws-exports";
 import configService from "./services/config";
@@ -248,4 +248,8 @@ router.onError(async (error) => {
   }
 });
 
-app.mount("#app");
+// Ensure the active locale's messages are loaded (en-gb is bundled; any other
+// language is fetched as a code-split chunk) before the first render.
+loadLocaleMessages(getLocale()).finally(() => {
+  app.mount("#app");
+});
