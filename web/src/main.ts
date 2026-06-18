@@ -250,6 +250,10 @@ router.onError(async (error) => {
 
 // Ensure the active locale's messages are loaded (en-gb is bundled; any other
 // language is fetched as a code-split chunk) before the first render.
-loadLocaleMessages(getLocale()).finally(() => {
-  app.mount("#app");
-});
+loadLocaleMessages(getLocale())
+  // On a locale-chunk load failure, fall back to the bundled en-gb messages
+  // (no console noise). The app must mount regardless.
+  .catch(() => {})
+  .finally(() => {
+    app.mount("#app");
+  });
