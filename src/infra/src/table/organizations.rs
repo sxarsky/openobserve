@@ -41,6 +41,7 @@ pub struct OrganizationRecord {
     pub identifier: String,
     pub org_name: String,
     pub org_type: OrganizationType,
+    pub status: String,
     pub created_at: i64,
     pub updated_at: i64,
     #[cfg(feature = "cloud")]
@@ -54,6 +55,7 @@ impl OrganizationRecord {
             identifier: identifier.to_string(),
             org_name: org_name.to_string(),
             org_type,
+            status: "active".to_string(),
             created_at: now,
             updated_at: now,
             #[cfg(feature = "cloud")]
@@ -68,6 +70,7 @@ impl From<Model> for OrganizationRecord {
             identifier: model.identifier,
             org_name: model.org_name,
             org_type: model.org_type.into(),
+            status: model.status,
             created_at: model.created_at,
             updated_at: model.updated_at,
             #[cfg(feature = "cloud")]
@@ -138,6 +141,7 @@ pub async fn add(
         identifier: org_id.to_string(),
         org_name: org_name.to_string(),
         org_type,
+        status: "active".to_string(),
         created_at: now,
         updated_at: now,
         #[cfg(feature = "cloud")]

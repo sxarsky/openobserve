@@ -372,6 +372,10 @@ pub async fn init() -> Result<(), anyhow::Error> {
     tokio::task::spawn(db::org_users::watch());
     tokio::task::spawn(db::org_ingestion_tokens::watch());
     tokio::task::spawn(db::organization::watch());
+    tokio::task::spawn(db::org_status::watch());
+    if let Err(e) = db::org_status::load_from_db().await {
+        log::error!("Failed to load org status cache: {e}");
+    }
 
     #[cfg(feature = "cloud")]
     tokio::task::spawn(o2_enterprise::enterprise::cloud::billings::watch());
