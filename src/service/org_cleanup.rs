@@ -21,6 +21,7 @@ const MAX_ATTEMPTS: i32 = 10;
 const POLL_INTERVAL_SECS: u64 = 30;
 
 const ORDER_DELETE_STREAMS: i32 = 100;
+const ORDER_DELETE_STREAM_ITEM: i32 = 150;
 const ORDER_DELETE_FILE_LIST: i32 = 200;
 const ORDER_DELETE_DB_RESOURCES: i32 = 300;
 const ORDER_DELETE_SCHEDULER_TRIGGERS: i32 = 400;
@@ -195,7 +196,6 @@ async fn process_org_tasks(tasks: Vec<org_cleanup_tasks::CleanupTask>) {
     }
 }
 
-#[allow(unused_variables)]
 async fn emit_failed_alert(org_id: &str, _step: &str) {
     #[cfg(feature = "cloud")]
     {
@@ -212,6 +212,12 @@ async fn emit_failed_alert(org_id: &str, _step: &str) {
             stream_name: None,
         })
         .await;
+    }
+    #[cfg(not(feature = "cloud"))]
+    {
+        log::error!(
+            "[org_cleanup] org={org_id} permanently failed (alert not available in this build)"
+        );
     }
 }
 
@@ -247,18 +253,30 @@ async fn step_delete_streams(org_id: &str, org_name: &str) -> Result<(), anyhow:
     // Enqueue one sub-task per stream
     let sub_tasks: Vec<org_cleanup_tasks::NewCleanupTask> = streams
         .iter()
-        .enumerate()
-        .map(|(i, s)| org_cleanup_tasks::NewCleanupTask {
+        .map(|s| org_cleanup_tasks::NewCleanupTask {
             org_id: org_id.to_string(),
             org_name: org_name.to_string(),
             step: format!("delete_stream:{}/{}", s.stream_type, s.stream_name),
-            // Use step order just below ORDER_DELETE_FILE_LIST so they run before it
-            step_order: ORDER_DELETE_STREAMS + 1 + i as i32,
+            step_order: ORDER_DELETE_STREAM_ITEM,
         })
         .collect();
 
     if !sub_tasks.is_empty() {
         org_cleanup_tasks::add_batch(&sub_tasks).await?;
+
+        // Verify all sub-tasks were inserted
+        let all = org_cleanup_tasks::list_by_org_status(org_id, None).await?;
+        let inserted = all
+            .iter()
+            .filter(|t| t.step.starts_with("delete_stream:"))
+            .count();
+        if inserted != sub_tasks.len() {
+            return Err(anyhow::anyhow!(
+                "sub-task count mismatch: expected {} got {}",
+                sub_tasks.len(),
+                inserted
+            ));
+        }
     }
 
     Ok(())
@@ -273,24 +291,23 @@ async fn step_delete_stream(org_id: &str, type_and_name: &str) -> Result<(), any
 
     let stream_type = StreamType::from(stream_type_str);
 
-    // Delete storage files
-    let files =
-        infra::file_list::query_for_dump(org_id, stream_type, stream_name, (0, i64::MAX)).await?;
-
-    let file_refs: Vec<(&str, &str)> = files
-        .iter()
-        .map(|f| (f.account.as_str(), f.file.as_str()))
-        .collect();
-
-    if !file_refs.is_empty() {
-        if let Err(e) = infra::storage::del(file_refs).await {
-            log::error!("[org_cleanup] delete storage files for stream {type_and_name} error: {e}");
+    // Delete storage files in a loop to handle large streams
+    loop {
+        let files =
+            infra::file_list::query_for_dump(org_id, stream_type, stream_name, (0, i64::MAX))
+                .await?;
+        if files.is_empty() {
+            break;
         }
-    }
-
-    for f in &files {
-        if let Err(e) = infra::file_list::remove(&f.file).await {
-            log::error!("[org_cleanup] remove file_list entry {} error: {e}", f.file);
+        for chunk in files.chunks(1000) {
+            let paths: Vec<(&str, &str)> = chunk
+                .iter()
+                .map(|f| (f.account.as_str(), f.file.as_str()))
+                .collect();
+            infra::storage::del(paths).await?;
+            for f in chunk {
+                infra::file_list::remove(&f.file).await?;
+            }
         }
     }
 
@@ -313,6 +330,13 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         service_streams, system_settings, templates, trial_quota_usage,
     };
 
+    // FK-constrained children must be deleted before their parents
+    if let Err(e) = alert_incidents::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org alert_incidents error: {e}");
+    }
+    if let Err(e) = incident_events::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org incident_events error: {e}");
+    }
     if let Err(e) = alerts::delete_by_org(org_id).await {
         log::error!("[org_cleanup] delete_by_org alerts error: {e}");
     }
@@ -364,18 +388,25 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
     if let Err(e) = trial_quota_usage::delete_by_org(org_id).await {
         log::error!("[org_cleanup] delete_by_org trial_quota_usage error: {e}");
     }
-    if let Err(e) = alert_incidents::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org alert_incidents error: {e}");
-    }
-    if let Err(e) = incident_events::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org incident_events error: {e}");
-    }
     if let Err(e) = service_streams::delete_all(org_id).await {
         log::error!("[org_cleanup] service_streams::delete_all error: {e}");
     }
     if let Err(e) = system_settings::delete_org_settings(org_id).await {
         log::error!("[org_cleanup] system_settings::delete_org_settings error: {e}");
     }
+
+    // Delete pipelines (iterate-delete because there is no delete_by_org batch call)
+    let pipelines = infra::pipeline::list_by_org(org_id).await?;
+    for p in pipelines {
+        infra::pipeline::delete(&p.id).await?;
+    }
+
+    // Delete saved views from the meta key-value store
+    let db = infra::db::get_db().await;
+    let prefix = format!("/organization/savedviews/{org_id}/");
+    db.delete(&prefix, true, true, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("saved_views delete error: {e}"))?;
 
     // TODO: add delete_by_org for timed_annotations (no org_id column, linked via dashboard_id)
     // TODO: add delete_by_org for timed_annotation_panels (no org_id column)
@@ -390,14 +421,9 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
 async fn step_delete_scheduler_triggers(org_id: &str) -> Result<(), anyhow::Error> {
     let triggers = infra::scheduler::list_by_org(org_id, None).await?;
     for t in triggers {
-        let org = t.org.clone();
-        let module_key = t.module_key.clone();
-        let module_str = format!("{:?}", t.module);
-        if let Err(e) = infra::scheduler::delete(&org, t.module, &module_key).await {
-            log::error!(
-                "[org_cleanup] delete trigger org={org} module={module_str} key={module_key} error: {e}"
-            );
-        }
+        infra::scheduler::delete(&t.org, t.module, &t.module_key)
+            .await
+            .map_err(|e| anyhow::anyhow!("scheduler delete failed: {e}"))?;
     }
     Ok(())
 }
@@ -420,6 +446,13 @@ async fn step_delete_users(org_id: &str) -> Result<(), anyhow::Error> {
             if let Err(e) = infra::table::users::remove(&member.email).await {
                 log::error!("[org_cleanup] remove user {} error: {e}", member.email);
             }
+            #[cfg(feature = "enterprise")]
+            if let Err(e) = o2_openfga::authorizer::authz::delete_user_tuples(&member.email).await {
+                return Err(anyhow::anyhow!(
+                    "delete_user_tuples failed for {}: {e}",
+                    member.email
+                ));
+            }
         }
         if let Err(e) = infra::table::org_users::remove(org_id, &member.email).await {
             log::error!(
@@ -431,21 +464,64 @@ async fn step_delete_users(org_id: &str) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[allow(unused_variables)]
 async fn step_delete_ofga(org_id: &str) -> Result<(), anyhow::Error> {
     #[cfg(feature = "enterprise")]
     {
-        log::info!("[org_cleanup] OpenFGA cleanup for org={org_id} (enterprise)");
+        o2_openfga::authorizer::authz::delete_org_tuples(org_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("delete_org_tuples failed: {e}"))?;
     }
+    #[cfg(not(feature = "enterprise"))]
+    let _ = org_id;
     Ok(())
 }
 
-#[allow(unused_variables)]
 async fn step_delete_cloud_billing(org_id: &str) -> Result<(), anyhow::Error> {
     #[cfg(feature = "cloud")]
     {
-        log::info!("[org_cleanup] cloud billing cleanup for org={org_id} (cloud)");
+        use o2_enterprise::enterprise::cloud::{
+            billing_group, billing_group_members,
+            billings::cancel_org_subscription,
+            table::{billing_group_invites, customer_billings, org_invites},
+        };
+
+        // 1. Cancel Stripe subscription
+        cancel_org_subscription(org_id).await?;
+
+        // 2. Delete customer billing records
+        customer_billings::delete_by_org_id(org_id).await?;
+
+        // 3. Billing group membership cleanup
+        // If this org is a payer, remove all its members from billing group
+        let members = billing_group::list_billing_group_members_of(org_id).await?;
+        for m in &members {
+            if let Err(e) = billing_group_members::remove(&m.payer_org_id, &m.member_org_id).await {
+                log::warn!("[org_cleanup] remove_member failed: {e}");
+            }
+        }
+        // If this org is a member, remove it from its payer's group
+        if let Ok(Some(membership)) = billing_group::list_billing_membership_of(org_id).await {
+            let _ = billing_group_members::remove(&membership.payer_org_id, org_id).await;
+        }
+
+        // 4. Delete billing group invites
+        billing_group_invites::delete_by_invitee_org(org_id).await?;
+        let sent = billing_group_invites::get_invites_by_inviter_org(org_id).await?;
+        for inv in sent {
+            let _ =
+                billing_group_invites::delete_invite_by_org_token(&inv.invitee_org_id, &inv.token)
+                    .await;
+        }
+
+        // 5. Delete pending org user invites
+        let pending = org_invites::list_by_org(org_id).await?;
+        let tokens: Vec<String> = pending.into_iter().map(|i| i.token).collect();
+        if !tokens.is_empty() {
+            org_invites::batch_remove(tokens).await?;
+        }
     }
+    #[cfg(not(feature = "cloud"))]
+    let _ = org_id;
     Ok(())
 }
 
