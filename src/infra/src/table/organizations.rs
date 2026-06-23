@@ -127,6 +127,7 @@ pub async fn add(
         identifier: Set(org_id.to_string()),
         org_name: Set(org_name.to_string()),
         org_type: Set(org_type.into()),
+        status: Set("active".to_string()),
         created_at: Set(now),
         updated_at: Set(now),
         #[cfg(feature = "cloud")]
@@ -348,6 +349,20 @@ pub async fn batch_remove(org_ids: Vec<String>) -> Result<(), errors::Error> {
     Ok(())
 }
 
+pub async fn set_status(org_id: &str, status: &str) -> Result<(), errors::Error> {
+    let client = ORM_CLIENT.get_or_init(connect_to_orm).await;
+    let now = config::utils::time::now_micros();
+    Entity::update_many()
+        .col_expr(Column::Status, Expr::value(status))
+        .col_expr(Column::UpdatedAt, Expr::value(now))
+        .filter(Column::Identifier.eq(org_id))
+        .exec(client)
+        .await
+        .map_err(|e| errors::Error::Message(e.to_string()))?;
+    invalidate_cache(Some(org_id)).await;
+    Ok(())
+}
+
 pub async fn invalidate_cache(org_id: Option<&str>) {
     let mut cache = CACHE.write().await;
     if let Some(v) = org_id {
@@ -412,6 +427,7 @@ mod tests {
             identifier: "test-org".to_string(),
             org_name: "Test Org".to_string(),
             org_type: 0,
+            status: "active".to_string(),
             created_at: 1_000_000,
             updated_at: 2_000_000,
         };
