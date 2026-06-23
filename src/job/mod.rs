@@ -833,6 +833,8 @@ pub async fn init() -> Result<(), anyhow::Error> {
     tokio::task::spawn(pipeline::run());
     pipeline_error_cleanup::run();
     session_cleanup::run();
+    tokio::task::spawn(crate::service::org_cleanup::run());
+    tokio::task::spawn(crate::service::org_cleanup::run_retention_purge());
 
     if LOCAL_NODE.is_compactor() {
         tokio::task::spawn(file_list_dump::run());

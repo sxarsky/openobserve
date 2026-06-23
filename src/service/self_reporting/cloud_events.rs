@@ -14,6 +14,7 @@ const CLOUD_EVENT_STREAM: &str = "cloud_events";
 pub enum EventType {
     OrgCreated,
     OrgDeleted,
+    OrgCleanupFailed,
     UserJoined,
     CheckoutSessionCreated,
     SubscriptionCreated,
