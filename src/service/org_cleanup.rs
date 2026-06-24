@@ -324,10 +324,11 @@ async fn step_delete_file_list(org_id: &str) -> Result<(), anyhow::Error> {
 
 async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
     use infra::table::{
-        action_scripts, alert_incidents, alerts, backfill_jobs, cipher, dashboards, destinations,
-        enrichment_table_urls, enrichment_tables, folders, incident_events, kv_store,
-        org_storage_providers, re_pattern, re_pattern_stream_map, reports, search_queue,
-        service_streams, system_settings, templates, trial_quota_usage,
+        action_scripts, alert_incidents, alerts, backfill_jobs, cipher, compactor_manual_jobs,
+        dashboards, destinations, distinct_values, enrichment_table_urls, enrichment_tables,
+        folders, incident_events, kv_store, org_storage_providers, re_pattern,
+        re_pattern_stream_map, reports, search_queue, service_streams, short_urls, system_settings,
+        templates, timed_annotations, trial_quota_usage,
     };
 
     // FK-constrained children must be deleted before their parents
@@ -408,12 +409,23 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         .await
         .map_err(|e| anyhow::anyhow!("saved_views delete error: {e}"))?;
 
-    // TODO: add delete_by_org for timed_annotations (no org_id column, linked via dashboard_id)
-    // TODO: add delete_by_org for timed_annotation_panels (no org_id column)
-    // TODO: add delete_by_org for distinct_values (sqlx-based, different structure)
-    // TODO: add delete_by_org for short_urls (no org column)
-    // TODO: add delete_by_org for compactor_manual_jobs (no org column confirmed)
-    // TODO: add delete_by_org for search_job (no direct org column in entity)
+    // timed_annotation_panels cascade from timed_annotations; both are deleted here
+    // via the two-hop path: folders.org → dashboards.folder_id → timed_annotations.dashboard_id
+    if let Err(e) = timed_annotations::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org timed_annotations error: {e}");
+    }
+    if let Err(e) = distinct_values::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org distinct_values error: {e}");
+    }
+    if let Err(e) = short_urls::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org short_urls error: {e}");
+    }
+    if let Err(e) = compactor_manual_jobs::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org compactor_manual_jobs error: {e}");
+    }
+    if let Err(e) = infra::table::search_job::search_jobs::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org search_jobs error: {e}");
+    }
 
     Ok(())
 }
