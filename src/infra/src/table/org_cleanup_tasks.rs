@@ -205,8 +205,9 @@ mod tests {
 
     #[test]
     fn test_cleanup_task_default_status() {
-        // CleanupTask has a status field defaulting to "pending" when constructed from NewCleanupTask
-        // We can only test the NewCleanupTask struct here since CleanupTask comes from DB
+        // CleanupTask has a status field defaulting to "pending" when constructed from
+        // NewCleanupTask We can only test the NewCleanupTask struct here since CleanupTask
+        // comes from DB
         let t = NewCleanupTask {
             org_id: "org1".to_string(),
             org_name: "Org One".to_string(),
