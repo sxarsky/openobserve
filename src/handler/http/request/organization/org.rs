@@ -1263,6 +1263,26 @@ pub async fn cluster_info(
     MetaHttpResponse::json(cluster_info_response)
 }
 
+/// InitiateOrgDeletion
+#[cfg(feature = "cloud")]
+pub async fn initiate_org_deletion(
+    Headers(user_email): Headers<UserEmail>,
+    Path(org_id): Path<String>,
+) -> Response {
+    match crate::service::org_cleanup::initiate_deletion(&org_id, &user_email.user_id).await {
+        Ok(()) => MetaHttpResponse::ok("Organization deletion initiated"),
+        Err(e) => MetaHttpResponse::bad_request(e),
+    }
+}
+
+/// ListOrgCleanupTasks - admin endpoint to inspect cleanup task state for an org
+pub async fn list_org_cleanup_tasks(Path(org_id): Path<String>) -> Response {
+    match infra::table::org_cleanup_tasks::list_by_org_status(&org_id, None).await {
+        Ok(tasks) => MetaHttpResponse::json(tasks),
+        Err(e) => MetaHttpResponse::bad_request(e),
+    }
+}
+
 /// Helper function to collect nodes from the local cluster
 async fn get_local_nodes() -> NodeListResponse {
     let mut response = NodeListResponse::new();

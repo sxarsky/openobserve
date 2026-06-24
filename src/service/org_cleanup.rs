@@ -525,6 +525,31 @@ async fn step_delete_cloud_billing(org_id: &str) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+pub async fn initiate_deletion(org_id: &str, _initiated_by: &str) -> Result<(), anyhow::Error> {
+    use crate::service::db::org_status;
+
+    // Check org is not already being deleted
+    if org_status::is_deleting(org_id) {
+        return Err(anyhow::anyhow!("Organization is already being deleted"));
+    }
+
+    // Look up org name from DB
+    let org_name = infra::table::organizations::get(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("org not found: {e}"))?
+        .org_name;
+
+    // Insert all fixed cleanup tasks
+    let tasks = fixed_steps(org_id, &org_name);
+    org_cleanup_tasks::add_batch(&tasks).await?;
+
+    // Atomically set status to deleting in DB + broadcast to cluster
+    org_status::set_deleting(org_id).await?;
+
+    log::info!("[org_cleanup] initiated deletion for org={org_id}");
+    Ok(())
+}
+
 async fn step_delete_org_record(org_id: &str) -> Result<(), anyhow::Error> {
     infra::table::organizations::remove(org_id)
         .await
