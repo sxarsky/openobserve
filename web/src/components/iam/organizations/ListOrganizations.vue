@@ -79,6 +79,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </template>
 
 
+          <template #cell-status="{ row }">
+            <OBadge
+              :variant="row.status === 'deleting' ? 'warning' : 'success-soft'"
+              size="sm"
+            >
+              {{ row.status }}
+            </OBadge>
+          </template>
+
           <template #cell-actions="{ row }">
             <OButton
               data-test="organization-name-edit"
@@ -89,6 +98,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             >
               <OIcon name="edit" size="sm" />
             </OButton>
+            <OButton
+              v-if="row.status === 'deleting'"
+              data-test="organization-cleanup-tasks"
+              variant="ghost"
+              size="icon-sm"
+              title="View deletion progress"
+              @click="viewCleanupTasks(row)"
+            >
+              <OIcon name="delete_history" size="sm" />
+            </OButton>
           </template>
       </OTable>
       </div>
@@ -98,6 +117,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @update:open="onDrawerOpenChange"
       @updated="updateOrganizationList"
       :model-value="toBeUpdatedOrganization"
+    />
+    <OrgCleanupTasksDialog
+      :open="showCleanupDialog"
+      :org-id="cleanupTargetOrg.id"
+      :org-name="cleanupTargetOrg.name"
+      @update:open="showCleanupDialog = $event"
     />
   </div>
 </template>
@@ -114,8 +139,10 @@ import { useI18n } from "vue-i18n";
 import organizationsService from "@/services/organizations";
 import JoinOrganization from "./JoinOrganization.vue";
 import AddUpdateOrganization from "@/components/iam/organizations/AddUpdateOrganization.vue";
+import OrgCleanupTasksDialog from "@/components/iam/organizations/OrgCleanupTasksDialog.vue";
 import OEmptyState from "@/lib/core/EmptyState/OEmptyState.vue";
 import OButton from "@/lib/core/Button/OButton.vue";
+import OBadge from "@/lib/core/Badge/OBadge.vue";
 import AppPageHeader from "@/components/common/AppPageHeader.vue";
 import OIcon from "@/lib/core/Icon/OIcon.vue";
 import OSearchInput from "@/lib/forms/SearchInput/OSearchInput.vue";
@@ -131,8 +158,10 @@ export default defineComponent({
   name: "PageOrganization",
   components: {
     AddUpdateOrganization,
+    OrgCleanupTasksDialog,
     OEmptyState,
     OButton,
+    OBadge,
     AppPageHeader,
     OIcon,
     OTable,
@@ -148,6 +177,8 @@ export default defineComponent({
     const showJoinOrganizationDialog = ref(false);
     const showOrgAPIKeyDialog = ref(false);
     const organizationAPIKey = ref("");
+    const showCleanupDialog = ref(false);
+    const cleanupTargetOrg = ref({ id: "", name: "" });
     const filterQuery = ref("");
     const toBeUpdatedOrganization = ref({
       id: "",
@@ -194,6 +225,16 @@ export default defineComponent({
         size: 150,
         meta: { align: "left" },
       },
+      {
+        id: "status",
+        header: "Status",
+        accessorKey: "status",
+        sortable: true,
+        resizable: true,
+        hideable: true,
+        size: 120,
+        meta: { align: "left" },
+      },
     ];
 
     if (config.isCloud == "true") {
@@ -216,7 +257,7 @@ export default defineComponent({
       size: 80,
       minSize: 64,
       maxSize: 100,
-      meta: { align: "center", actionCount: 1 },
+      meta: { align: "center", actionCount: 2 },
     });
 
     watch(
@@ -281,6 +322,7 @@ export default defineComponent({
             identifier: data.identifier,
             type: convertToTitleCase(data.type),
             plan: billingPlans[data.plan] || "-",
+            status: data.status ?? "active",
           };
 
           // Additional fields and logic for cloud configuration
@@ -393,6 +435,11 @@ export default defineComponent({
       });
     };
 
+    const viewCleanupTasks = (row: any) => {
+      cleanupTargetOrg.value = { id: row.identifier, name: row.name };
+      showCleanupDialog.value = true;
+    };
+
     const renameOrganization = (row: any) => {
       toBeUpdatedOrganization.value = {
         id: row.identifier,
@@ -423,6 +470,8 @@ export default defineComponent({
       showJoinOrganizationDialog,
       showOrgAPIKeyDialog,
       organizationAPIKey,
+      showCleanupDialog,
+      cleanupTargetOrg,
       addOrganization,
       getOrganizations,
       inviteTeam,
@@ -430,6 +479,7 @@ export default defineComponent({
       hideAddOrgDialog,
       onDrawerOpenChange,
       renameOrganization,
+      viewCleanupTasks,
       toBeUpdatedOrganization,
     };
   },

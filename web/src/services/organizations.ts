@@ -103,6 +103,10 @@ const organizations = {
     return http().delete(`/api/${orgIdentifier}/external_contract/${targetOrgId}`);
   },
 
+  get_cleanup_tasks: (metaOrgIdentifier: string, targetOrgId: string) => {
+    return http().get(`/api/${metaOrgIdentifier}/org_cleanup_tasks/${targetOrgId}`);
+  },
+
   // Org ingestion tokens
   list_org_ingestion_tokens: (orgIdentifier: string) => {
     return http().get(`/api/${orgIdentifier}/ingestion-tokens`);
