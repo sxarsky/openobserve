@@ -1277,8 +1277,11 @@ pub async fn initiate_org_deletion(
 
 /// ListOrgCleanupTasks - admin endpoint to inspect cleanup task state for an org
 pub async fn list_org_cleanup_tasks(
-    Path((_meta_org, target_org_id)): Path<(String, String)>,
+    Path((meta_org, target_org_id)): Path<(String, String)>,
 ) -> Response {
+    if meta_org != "_meta" {
+        return MetaHttpResponse::forbidden("Not allowed");
+    }
     match infra::table::org_cleanup_tasks::list_by_org_status(&target_org_id, None).await {
         Ok(tasks) => MetaHttpResponse::json(tasks),
         Err(e) => MetaHttpResponse::bad_request(e),

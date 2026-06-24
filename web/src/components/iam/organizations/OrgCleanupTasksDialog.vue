@@ -95,7 +95,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onUnmounted } from "vue";
-import { useStore } from "vuex";
 import ODialog from "@/lib/overlay/Dialog/ODialog.vue";
 import OButton from "@/lib/core/Button/OButton.vue";
 import OBadge from "@/lib/core/Badge/OBadge.vue";
@@ -126,14 +125,9 @@ export default defineComponent({
   },
   emits: ["update:open"],
   setup(props) {
-    const store = useStore();
     const tasks = ref<CleanupTask[]>([]);
     const loading = ref(false);
     let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    const metaOrg = computed(() =>
-      store.state.selectedOrganization?.identifier ?? "_meta"
-    );
 
     const sortedTasks = computed(() =>
       [...tasks.value].sort((a, b) => a.step_order - b.step_order)
@@ -159,10 +153,7 @@ export default defineComponent({
       if (!props.orgId) return;
       loading.value = true;
       try {
-        const res = await organizationsService.get_cleanup_tasks(
-          metaOrg.value,
-          props.orgId
-        );
+        const res = await organizationsService.get_cleanup_tasks(props.orgId);
         tasks.value = res.data ?? [];
       } catch (e) {
         // silently fail — next poll will retry
