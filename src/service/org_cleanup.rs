@@ -493,9 +493,8 @@ async fn step_delete_cloud_billing(org_id: &str) -> Result<(), anyhow::Error> {
     #[cfg(feature = "cloud")]
     {
         use o2_enterprise::enterprise::cloud::{
-            billing_group, billing_group_members,
-            billings::cancel_org_subscription,
-            table::{billing_group_invites, customer_billings, org_invites},
+            billing_group, billing_invites, billings::cancel_org_subscription, customer_billings,
+            org_invites,
         };
 
         // 1. Cancel Stripe subscription
@@ -504,34 +503,14 @@ async fn step_delete_cloud_billing(org_id: &str) -> Result<(), anyhow::Error> {
         // 2. Delete customer billing records
         customer_billings::delete_by_org_id(org_id).await?;
 
-        // 3. Billing group membership cleanup
-        // If this org is a payer, remove all its members from billing group
-        let members = billing_group::list_billing_group_members_of(org_id).await?;
-        for m in &members {
-            if let Err(e) = billing_group_members::remove(&m.payer_org_id, &m.member_org_id).await {
-                log::warn!("[org_cleanup] remove_member failed: {e}");
-            }
-        }
-        // If this org is a member, remove it from its payer's group
-        if let Ok(Some(membership)) = billing_group::list_billing_membership_of(org_id).await {
-            let _ = billing_group_members::remove(&membership.payer_org_id, org_id).await;
-        }
+        // 3. Remove billing group memberships (payer and member sides)
+        billing_group::delete_org_billing_group_memberships(org_id).await?;
 
-        // 4. Delete billing group invites
-        billing_group_invites::delete_by_invitee_org(org_id).await?;
-        let sent = billing_group_invites::get_invites_by_inviter_org(org_id).await?;
-        for inv in sent {
-            let _ =
-                billing_group_invites::delete_invite_by_org_token(&inv.invitee_org_id, &inv.token)
-                    .await;
-        }
+        // 4. Delete billing group invites (sent and received)
+        billing_invites::delete_org_billing_group_invites(org_id).await?;
 
         // 5. Delete pending org user invites
-        let pending = org_invites::list_by_org(org_id).await?;
-        let tokens: Vec<String> = pending.into_iter().map(|i| i.token).collect();
-        if !tokens.is_empty() {
-            org_invites::batch_remove(tokens).await?;
-        }
+        org_invites::delete_all_org_invites(org_id).await?;
     }
     #[cfg(not(feature = "cloud"))]
     let _ = org_id;
