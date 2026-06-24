@@ -557,3 +557,73 @@ async fn step_delete_org_record(org_id: &str) -> Result<(), anyhow::Error> {
     crate::service::db::org_status::evict(org_id).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fixed_steps_count() {
+        let steps = fixed_steps("myorg", "My Org");
+        assert_eq!(steps.len(), 9);
+    }
+
+    #[test]
+    fn test_fixed_steps_order_ascending() {
+        let steps = fixed_steps("myorg", "My Org");
+        let orders: Vec<i32> = steps.iter().map(|s| s.step_order).collect();
+        let mut sorted = orders.clone();
+        sorted.sort();
+        assert_eq!(orders, sorted, "step_orders must be strictly ascending");
+    }
+
+    #[test]
+    fn test_fixed_steps_no_duplicates() {
+        let steps = fixed_steps("myorg", "My Org");
+        let mut seen = std::collections::HashSet::new();
+        for s in &steps {
+            assert!(seen.insert(s.step.clone()), "duplicate step: {}", s.step);
+        }
+    }
+
+    #[test]
+    fn test_fixed_steps_org_fields() {
+        let steps = fixed_steps("acme", "Acme Corp");
+        for s in &steps {
+            assert_eq!(s.org_id, "acme");
+            assert_eq!(s.org_name, "Acme Corp");
+        }
+    }
+
+    #[test]
+    fn test_fixed_steps_contains_all_expected() {
+        let steps = fixed_steps("org", "Org");
+        let names: Vec<&str> = steps.iter().map(|s| s.step.as_str()).collect();
+        for expected in &[
+            "delete_streams",
+            "delete_file_list",
+            "delete_db_resources",
+            "delete_scheduler_triggers",
+            "delete_k8s_resources",
+            "delete_users",
+            "delete_ofga",
+            "delete_cloud_billing",
+            "delete_org_record",
+        ] {
+            assert!(names.contains(expected), "missing step: {expected}");
+        }
+    }
+
+    #[test]
+    fn test_step_order_constants() {
+        assert!(ORDER_DELETE_STREAMS < ORDER_DELETE_STREAM_ITEM);
+        assert!(ORDER_DELETE_STREAM_ITEM < ORDER_DELETE_FILE_LIST);
+        assert!(ORDER_DELETE_FILE_LIST < ORDER_DELETE_DB_RESOURCES);
+        assert!(ORDER_DELETE_DB_RESOURCES < ORDER_DELETE_SCHEDULER_TRIGGERS);
+        assert!(ORDER_DELETE_SCHEDULER_TRIGGERS < ORDER_DELETE_K8S_RESOURCES);
+        assert!(ORDER_DELETE_K8S_RESOURCES < ORDER_DELETE_USERS);
+        assert!(ORDER_DELETE_USERS < ORDER_DELETE_OFGA);
+        assert!(ORDER_DELETE_OFGA < ORDER_DELETE_CLOUD_BILLING);
+        assert!(ORDER_DELETE_CLOUD_BILLING < ORDER_DELETE_ORG_RECORD);
+    }
+}

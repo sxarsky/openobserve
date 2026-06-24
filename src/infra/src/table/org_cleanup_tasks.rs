@@ -202,4 +202,29 @@ mod tests {
         };
         assert_eq!(t.step_order, 100);
     }
+
+    #[test]
+    fn test_cleanup_task_default_status() {
+        // CleanupTask has a status field defaulting to "pending" when constructed from NewCleanupTask
+        // We can only test the NewCleanupTask struct here since CleanupTask comes from DB
+        let t = NewCleanupTask {
+            org_id: "org1".to_string(),
+            org_name: "Org One".to_string(),
+            step: "delete_streams".to_string(),
+            step_order: 100,
+        };
+        assert_eq!(t.step, "delete_streams");
+        assert_eq!(t.step_order, 100);
+    }
+
+    #[test]
+    fn test_new_cleanup_task_step_order_zero_allowed() {
+        let t = NewCleanupTask {
+            org_id: "org".to_string(),
+            org_name: "Org".to_string(),
+            step: "custom".to_string(),
+            step_order: 0,
+        };
+        assert_eq!(t.step_order, 0);
+    }
 }

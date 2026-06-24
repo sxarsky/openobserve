@@ -81,4 +81,10 @@ mod tests {
         let org_id = path.split('/').next().unwrap_or("");
         assert_eq!(org_id, "");
     }
+
+    #[test]
+    fn test_non_deleting_org_is_allowed_by_cache() {
+        // ORG_STATUS_CACHE starts empty; is_deleting for an unknown org returns false
+        assert!(!crate::service::db::org_status::is_deleting("someorg"));
+    }
 }
