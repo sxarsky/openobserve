@@ -528,23 +528,28 @@ async fn step_delete_cloud_billing(org_id: &str) -> Result<(), anyhow::Error> {
 pub async fn initiate_deletion(org_id: &str, _initiated_by: &str) -> Result<(), anyhow::Error> {
     use crate::service::db::org_status;
 
-    // Check org is not already being deleted
-    if org_status::is_deleting(org_id) {
+    // Look up org — also gives us org_name for the cleanup tasks.
+    let org = infra::table::organizations::get(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("org not found: {e}"))?;
+
+    // Atomic CAS: flip status active→deleting in the DB.
+    // This is the single source-of-truth guard against concurrent requests on any cluster node.
+    // The in-memory cache check below is a fast-path optimisation only.
+    let won_race = infra::table::organizations::set_status_if(org_id, "active", "deleting")
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to set org status: {e}"))?;
+
+    if !won_race {
         return Err(anyhow::anyhow!("Organization is already being deleted"));
     }
 
-    // Look up org name from DB
-    let org_name = infra::table::organizations::get(org_id)
-        .await
-        .map_err(|e| anyhow::anyhow!("org not found: {e}"))?
-        .org_name;
-
-    // Insert all fixed cleanup tasks
-    let tasks = fixed_steps(org_id, &org_name);
+    // Insert all fixed cleanup tasks (idempotent — on_conflict do_nothing).
+    let tasks = fixed_steps(org_id, &org.org_name);
     org_cleanup_tasks::add_batch(&tasks).await?;
 
-    // Atomically set status to deleting in DB + broadcast to cluster
-    org_status::set_deleting(org_id).await?;
+    // Broadcast to all cluster nodes so their in-memory caches reflect the new status.
+    org_status::broadcast_deleting(org_id).await?;
 
     log::info!("[org_cleanup] initiated deletion for org={org_id}");
     Ok(())

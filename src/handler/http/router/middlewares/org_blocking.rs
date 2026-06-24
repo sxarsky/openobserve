@@ -25,10 +25,15 @@ pub async fn blocked_orgs_middleware(request: Request, next: Next) -> Response {
         .next()
         .unwrap_or("");
 
-    // Extract org_id as first path segment
+    // Extract org_id as first path segment.
+    // Skip the check for known non-org top-level path prefixes that share this router.
+    const SYSTEM_PREFIXES: &[&str] = &["organizations", "invites", "proxy"];
     let org_id = path.split('/').next().unwrap_or("");
 
-    if !org_id.is_empty() && crate::service::db::org_status::is_deleting(org_id) {
+    if !org_id.is_empty()
+        && !SYSTEM_PREFIXES.contains(&org_id)
+        && crate::service::db::org_status::is_deleting(org_id)
+    {
         use axum::{http::StatusCode, response::IntoResponse};
         return (StatusCode::FORBIDDEN, "Organization is being deleted").into_response();
     }

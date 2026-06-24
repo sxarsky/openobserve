@@ -27,6 +27,14 @@ pub async fn set_deleting(org_id: &str) -> Result<(), errors::Error> {
     Ok(())
 }
 
+/// Update local cache and broadcast to cluster — used when the DB write was already done
+/// atomically via `set_status_if` (e.g. in `initiate_deletion`).
+pub async fn broadcast_deleting(org_id: &str) -> Result<(), errors::Error> {
+    ORG_STATUS_CACHE.insert(org_id.to_string(), OrgStatus::Deleting);
+    coordinator::emit_deleting_event(org_id).await?;
+    Ok(())
+}
+
 /// Evict an org from the status cache on all nodes (called after deletion completes).
 pub async fn evict(org_id: &str) -> Result<(), errors::Error> {
     ORG_STATUS_CACHE.remove(org_id);

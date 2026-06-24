@@ -367,6 +367,32 @@ pub async fn set_status(org_id: &str, status: &str) -> Result<(), errors::Error>
     Ok(())
 }
 
+/// CAS update: sets status to `new_status` only when current status is `expected_status`.
+/// Returns `true` if the row was updated (i.e. this caller won the race), `false` if another
+/// writer already changed the status.
+pub async fn set_status_if(
+    org_id: &str,
+    expected_status: &str,
+    new_status: &str,
+) -> Result<bool, errors::Error> {
+    let client = ORM_CLIENT.get_or_init(connect_to_orm).await;
+    let now = config::utils::time::now_micros();
+    let result = Entity::update_many()
+        .col_expr(Column::Status, Expr::value(new_status))
+        .col_expr(Column::UpdatedAt, Expr::value(now))
+        .filter(Column::Identifier.eq(org_id))
+        .filter(Column::Status.eq(expected_status))
+        .exec(client)
+        .await
+        .map_err(|e| errors::Error::Message(e.to_string()))?;
+    if result.rows_affected > 0 {
+        invalidate_cache(Some(org_id)).await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 pub async fn invalidate_cache(org_id: Option<&str>) {
     let mut cache = CACHE.write().await;
     if let Some(v) = org_id {
