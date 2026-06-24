@@ -623,4 +623,25 @@ mod tests {
         assert!(ORDER_DELETE_OFGA < ORDER_DELETE_CLOUD_BILLING);
         assert!(ORDER_DELETE_CLOUD_BILLING < ORDER_DELETE_ORG_RECORD);
     }
+
+    #[tokio::test]
+    async fn test_initiate_deletion_creates_tasks() {
+        // Requires test DB setup — skip if not configured
+        if std::env::var("TEST_DB_URL").is_err() {
+            return;
+        }
+        let org_id = "test_org_deletion_001";
+        let result = initiate_deletion(org_id, "test@example.com").await;
+        assert!(result.is_ok(), "initiate_deletion failed: {:?}", result);
+
+        let tasks = infra::table::org_cleanup_tasks::list_by_org_status(org_id, None)
+            .await
+            .unwrap();
+        assert!(!tasks.is_empty(), "No cleanup tasks created");
+
+        // Verify required first steps are present
+        let steps: Vec<&str> = tasks.iter().map(|t| t.step.as_str()).collect();
+        assert!(steps.contains(&"delete_streams"), "Missing delete_streams step");
+        assert!(steps.contains(&"delete_org_record"), "Missing delete_org_record step");
+    }
 }
