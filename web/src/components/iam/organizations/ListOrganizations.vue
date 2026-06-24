@@ -99,6 +99,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               <OIcon name="edit" size="sm" />
             </OButton>
             <OButton
+              v-if="canDeleteOrg(row)"
+              data-test="organization-delete"
+              variant="ghost"
+              size="icon-sm"
+              title="Delete organization"
+              @click="deleteOrganization(row)"
+            >
+              <OIcon name="delete" size="sm" />
+            </OButton>
+            <OButton
               v-if="row.status === 'deleting'"
               data-test="organization-cleanup-tasks"
               variant="ghost"
@@ -137,6 +147,7 @@ import { copyToClipboard } from "@/utils/clipboard";
 import { useI18n } from "vue-i18n";
 
 import organizationsService from "@/services/organizations";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import JoinOrganization from "./JoinOrganization.vue";
 import AddUpdateOrganization from "@/components/iam/organizations/AddUpdateOrganization.vue";
 import OrgCleanupTasksDialog from "@/components/iam/organizations/OrgCleanupTasksDialog.vue";
@@ -257,7 +268,7 @@ export default defineComponent({
       size: 80,
       minSize: 64,
       maxSize: 100,
-      meta: { align: "center", actionCount: 2 },
+      meta: { align: "center", actionCount: 3 },
     });
 
     watch(
@@ -323,6 +334,7 @@ export default defineComponent({
             type: convertToTitleCase(data.type),
             plan: billingPlans[data.plan] || "-",
             status: data.status ?? "active",
+            _userRole: data.role ?? data.user_role ?? "",
           };
 
           // Additional fields and logic for cloud configuration
@@ -435,6 +447,36 @@ export default defineComponent({
       });
     };
 
+    const { confirm } = useConfirmDialog();
+
+    // Returns true if the current user can delete the given org row.
+    // Only shown on cloud builds; user must be root or an admin of that org.
+    const canDeleteOrg = (row: any): boolean => {
+      if (config.isCloud !== "true") return false;
+      if (row.status === "deleting") return false;
+      const role = row._userRole?.toLowerCase();
+      return role === "root" || role === "admin";
+    };
+
+    const deleteOrganization = async (row: any) => {
+      const confirmed = await confirm({
+        title: "Delete organization",
+        message: `Are you sure you want to delete "${row.name}"? This will permanently remove all data and cannot be undone.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+      });
+      if (!confirmed) return;
+
+      try {
+        await organizationsService.delete_org(row.identifier);
+        toast({ variant: "success", message: "Organization deletion initiated." });
+        getOrganizations();
+      } catch (e: any) {
+        const msg = e?.response?.data?.message || e?.message || "Failed to initiate deletion.";
+        toast({ variant: "error", message: msg });
+      }
+    };
+
     const viewCleanupTasks = (row: any) => {
       cleanupTargetOrg.value = { id: row.identifier, name: row.name };
       showCleanupDialog.value = true;
@@ -480,6 +522,8 @@ export default defineComponent({
       onDrawerOpenChange,
       renameOrganization,
       viewCleanupTasks,
+      canDeleteOrg,
+      deleteOrganization,
       toBeUpdatedOrganization,
     };
   },

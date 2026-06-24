@@ -106,6 +106,9 @@ const organizations = {
   get_cleanup_tasks: (targetOrgId: string) => {
     return http().get(`/api/_meta/org_cleanup_tasks/${targetOrgId}`);
   },
+  delete_org: (orgIdentifier: string) => {
+    return http().delete(`/api/${orgIdentifier}/organizations`);
+  },
 
   // Org ingestion tokens
   list_org_ingestion_tokens: (orgIdentifier: string) => {

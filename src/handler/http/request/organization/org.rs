@@ -1269,6 +1269,23 @@ pub async fn initiate_org_deletion(
     Headers(user_email): Headers<UserEmail>,
     Path(org_id): Path<String>,
 ) -> Response {
+    // Only root users or org admins with OpenFGA DELETE permission may delete an org.
+    if !check_permissions(
+        &org_id,
+        &org_id,
+        &user_email.user_id,
+        "organizations",
+        "DELETE",
+        None,
+        false,
+        false,
+        false,
+    )
+    .await
+    {
+        return MetaHttpResponse::forbidden("Not allowed");
+    }
+
     match crate::service::org_cleanup::initiate_deletion(&org_id, &user_email.user_id).await {
         Ok(()) => MetaHttpResponse::ok("Organization deletion initiated"),
         Err(e) => MetaHttpResponse::bad_request(e),
