@@ -344,6 +344,12 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
     if let Err(e) = folders::delete_by_org(org_id).await {
         log::error!("[org_cleanup] delete_by_org folders error: {e}");
     }
+    // timed_annotation_panels cascade from timed_annotations; both are deleted here
+    // via the three-hop join: folders.org → dashboards.folder_id → timed_annotations.dashboard_id
+    // Must run BEFORE dashboards::delete_by_org or the join finds no rows.
+    if let Err(e) = timed_annotations::delete_by_org(org_id).await {
+        log::error!("[org_cleanup] delete_by_org timed_annotations error: {e}");
+    }
     if let Err(e) = dashboards::delete_by_org(org_id).await {
         log::error!("[org_cleanup] delete_by_org dashboards error: {e}");
     }
@@ -409,11 +415,6 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         .await
         .map_err(|e| anyhow::anyhow!("saved_views delete error: {e}"))?;
 
-    // timed_annotation_panels cascade from timed_annotations; both are deleted here
-    // via the two-hop path: folders.org → dashboards.folder_id → timed_annotations.dashboard_id
-    if let Err(e) = timed_annotations::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org timed_annotations error: {e}");
-    }
     if let Err(e) = distinct_values::delete_by_org(org_id).await {
         log::error!("[org_cleanup] delete_by_org distinct_values error: {e}");
     }
