@@ -331,76 +331,79 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         templates, timed_annotations, trial_quota_usage,
     };
 
-    // FK-constrained children must be deleted before their parents
-    if let Err(e) = alert_incidents::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org alert_incidents error: {e}");
-    }
-    if let Err(e) = incident_events::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org incident_events error: {e}");
-    }
-    if let Err(e) = alerts::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org alerts error: {e}");
-    }
-    if let Err(e) = folders::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org folders error: {e}");
-    }
+    // FK-constrained children must be deleted before their parents.
+    // Order: timed_annotations → dashboards → folders (join chain: folders→dashboards→timed_annotations)
+    alert_incidents::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/alert_incidents: {e}"))?;
+    incident_events::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/incident_events: {e}"))?;
+    alerts::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/alerts: {e}"))?;
     // timed_annotation_panels cascade from timed_annotations; both are deleted here
     // via the three-hop join: folders.org → dashboards.folder_id → timed_annotations.dashboard_id
     // Must run BEFORE dashboards::delete_by_org or the join finds no rows.
-    if let Err(e) = timed_annotations::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org timed_annotations error: {e}");
-    }
-    if let Err(e) = dashboards::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org dashboards error: {e}");
-    }
-    if let Err(e) = templates::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org templates error: {e}");
-    }
-    if let Err(e) = destinations::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org destinations error: {e}");
-    }
-    if let Err(e) = reports::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org reports error: {e}");
-    }
-    if let Err(e) = action_scripts::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org action_scripts error: {e}");
-    }
-    if let Err(e) = kv_store::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org kv_store error: {e}");
-    }
-    if let Err(e) = cipher::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org cipher error: {e}");
-    }
-    if let Err(e) = enrichment_tables::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org enrichment_tables error: {e}");
-    }
-    if let Err(e) = enrichment_table_urls::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org enrichment_table_urls error: {e}");
-    }
-    if let Err(e) = backfill_jobs::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org backfill_jobs error: {e}");
-    }
-    if let Err(e) = search_queue::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org search_queue error: {e}");
-    }
-    if let Err(e) = re_pattern::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org re_pattern error: {e}");
-    }
-    if let Err(e) = re_pattern_stream_map::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org re_pattern_stream_map error: {e}");
-    }
-    if let Err(e) = org_storage_providers::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org org_storage_providers error: {e}");
-    }
-    if let Err(e) = trial_quota_usage::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org trial_quota_usage error: {e}");
-    }
-    if let Err(e) = service_streams::delete_all(org_id).await {
-        log::error!("[org_cleanup] service_streams::delete_all error: {e}");
-    }
-    if let Err(e) = system_settings::delete_org_settings(org_id).await {
-        log::error!("[org_cleanup] system_settings::delete_org_settings error: {e}");
-    }
+    timed_annotations::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/timed_annotations: {e}"))?;
+    // dashboards must be deleted before folders (FK constraint)
+    dashboards::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/dashboards: {e}"))?;
+    // folders safe to delete after dashboards and timed_annotations are gone
+    folders::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/folders: {e}"))?;
+    templates::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/templates: {e}"))?;
+    destinations::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/destinations: {e}"))?;
+    reports::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/reports: {e}"))?;
+    action_scripts::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/action_scripts: {e}"))?;
+    kv_store::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/kv_store: {e}"))?;
+    cipher::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/cipher: {e}"))?;
+    enrichment_tables::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/enrichment_tables: {e}"))?;
+    enrichment_table_urls::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/enrichment_table_urls: {e}"))?;
+    backfill_jobs::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/backfill_jobs: {e}"))?;
+    search_queue::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/search_queue: {e}"))?;
+    re_pattern::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/re_pattern: {e}"))?;
+    re_pattern_stream_map::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/re_pattern_stream_map: {e}"))?;
+    org_storage_providers::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/org_storage_providers: {e}"))?;
+    trial_quota_usage::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/trial_quota_usage: {e}"))?;
+    service_streams::delete_all(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/service_streams: {e}"))?;
+    system_settings::delete_org_settings(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/system_settings: {e}"))?;
 
     // Delete pipelines (iterate-delete because there is no delete_by_org batch call)
     let pipelines = infra::pipeline::list_by_org(org_id).await?;
@@ -415,18 +418,18 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         .await
         .map_err(|e| anyhow::anyhow!("saved_views delete error: {e}"))?;
 
-    if let Err(e) = distinct_values::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org distinct_values error: {e}");
-    }
-    if let Err(e) = short_urls::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org short_urls error: {e}");
-    }
-    if let Err(e) = compactor_manual_jobs::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org compactor_manual_jobs error: {e}");
-    }
-    if let Err(e) = infra::table::search_job::search_jobs::delete_by_org(org_id).await {
-        log::error!("[org_cleanup] delete_by_org search_jobs error: {e}");
-    }
+    distinct_values::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/distinct_values: {e}"))?;
+    short_urls::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/short_urls: {e}"))?;
+    compactor_manual_jobs::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/compactor_manual_jobs: {e}"))?;
+    infra::table::search_job::search_jobs::delete_by_org(org_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("step_delete_db_resources/search_jobs: {e}"))?;
 
     Ok(())
 }
