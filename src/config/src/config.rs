@@ -1985,6 +1985,12 @@ pub struct Compact {
         help = "Per-file concurrent row_group workers for tantivy index generation during compaction. less than or equal to 1 disables (single-threaded)"
     )]
     pub tantivy_builder_thread_num: usize,
+    #[env_config(
+        name = "ZO_COMPACT_TANTIVY_SORT_MERGE_ENABLED",
+        default = false,
+        help = "During compaction, try to build the new tantivy index by sort-merging existing .ttv files by _timestamp before falling back to rebuilding from parquet/vortex"
+    )]
+    pub tantivy_sort_merge_enabled: bool,
 }
 
 #[derive(Serialize, EnvConfig, Default)]

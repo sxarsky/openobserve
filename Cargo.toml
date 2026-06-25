@@ -514,4 +514,4 @@ datafusion-session = { git = "https://github.com/openobserve/datafusion", branch
 datafusion-sql = { git = "https://github.com/openobserve/datafusion", branch = "branch-54-modify" }
 object_store = { git = "https://github.com/openobserve/arrow-rs-object-store", branch = "openobserve-v0.13.2" }
 proc-macro-error2 = { git = "https://github.com/hengfeiyang/proc-macro-error-2", branch = "main" }
-tantivy = { git = "https://github.com/openobserve/tantivy", branch = "perf/openobserve" }
+tantivy = { git = "https://github.com/quickwit-oss/tantivy", rev = "02e34508e2c66485764bb07ff9b3ec50a383de88" }

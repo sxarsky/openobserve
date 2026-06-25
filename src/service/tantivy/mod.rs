@@ -26,11 +26,16 @@ use arrow_schema::{DataType, Schema};
 use bytes::Bytes;
 use config::{
     FileFormat, INDEX_FIELD_NAME_FOR_ALL, PARQUET_MAX_ROW_GROUP_SIZE, TIMESTAMP_COL_NAME,
-    get_config, tantivy::tokenizer::O2_TOKENIZER, utils::inverted_index::to_tantivy_name,
+    get_config, meta::stream::FileKey, tantivy::tokenizer::O2_TOKENIZER,
+    utils::inverted_index::to_tantivy_name,
 };
 use hashbrown::HashSet;
 use infra::storage;
-use tantivy_utils::puffin_directory::{PROP_ROW_GROUP_SIZE, writer::PuffinDirWriter};
+use tantivy::{IndexSettings, IndexSortByField, Order, indexer::merge_filtered_segments};
+use tantivy_utils::puffin_directory::{
+    PROP_ROW_GROUP_SIZE, caching_directory::CachingDirectory, footer_cache::FooterCache,
+    reader::PuffinDirReader, writer::PuffinDirWriter,
+};
 
 pub(crate) async fn create_tantivy_index(
     caller: &str,
@@ -95,6 +100,133 @@ pub(crate) async fn create_tantivy_index(
             return Err(e.into());
         }
     }
+    Ok(index_size)
+}
+
+pub(crate) async fn merge_tantivy_indices(
+    caller: &str,
+    org_id: &str,
+    target_file_name: &str,
+    source_files: &[FileKey],
+) -> Result<usize, anyhow::Error> {
+    let start = std::time::Instant::now();
+    let cfg = get_config();
+    let caller = format!("[{caller}:JOB]");
+
+    if source_files.is_empty() {
+        return Err(anyhow::anyhow!(
+            "no source files given for tantivy sort merge"
+        ));
+    }
+    let expected_docs: usize = source_files.iter().map(|f| f.meta.records as usize).sum();
+
+    let mut indices = Vec::with_capacity(source_files.len());
+    for source_file in source_files {
+        if source_file.meta.index_size <= 0 {
+            return Err(anyhow::anyhow!(
+                "source file has no tantivy index: {}",
+                source_file.key
+            ));
+        }
+
+        let Some(ttv_file_name) = to_tantivy_name(&source_file.key) else {
+            return Err(anyhow::anyhow!(
+                "unable to derive tantivy index name from source file: {}",
+                source_file.key
+            ));
+        };
+
+        let source = object_store::ObjectMeta {
+            location: ttv_file_name.clone().into(),
+            last_modified: *config::utils::time::BASE_TIME,
+            size: source_file.meta.index_size as u64,
+            e_tag: None,
+            version: None,
+        };
+        let puffin_dir =
+            Arc::new(PuffinDirReader::from_path(source_file.account.clone(), source).await?);
+        let footer_cache = FooterCache::from_directory(puffin_dir.clone(), &ttv_file_name).await?;
+        let cache_dir = CachingDirectory::new_with_cacher(puffin_dir, Arc::new(footer_cache));
+        let index = tantivy::Index::open(cache_dir)?;
+        indices.push(index);
+    }
+
+    let mut segments = Vec::new();
+    for index in &indices {
+        segments.extend(index.searchable_segments()?);
+    }
+    if segments.is_empty() {
+        return Err(anyhow::anyhow!(
+            "source tantivy indices have no searchable segments"
+        ));
+    }
+
+    let out_dir = PuffinDirWriter::new();
+    out_dir.set_property(PROP_ROW_GROUP_SIZE, PARQUET_MAX_ROW_GROUP_SIZE.to_string());
+    let merge_dir = out_dir.clone();
+    let target_settings = IndexSettings {
+        sort_by_field: Some(IndexSortByField {
+            field: TIMESTAMP_COL_NAME.to_string(),
+            order: Order::Desc,
+        }),
+        ..Default::default()
+    };
+    let filter_doc_ids = std::iter::repeat_with(|| None)
+        .take(segments.len())
+        .collect::<Vec<_>>();
+    let source_count = source_files.len();
+
+    let merged = tokio::task::spawn_blocking(move || {
+        merge_filtered_segments(&segments, target_settings, filter_doc_ids, merge_dir)
+            .map_err(|e| anyhow::anyhow!("merge_filtered_segments failed: {e}"))
+    })
+    .await??;
+
+    let merged_segs = merged.searchable_segments()?;
+    if merged_segs.len() != 1 {
+        return Err(anyhow::anyhow!(
+            "sort-merged tantivy index produced {} segments (expected 1)",
+            merged_segs.len()
+        ));
+    }
+    let merged_docs = merged_segs[0].meta().max_doc() as usize;
+    if merged_docs != expected_docs {
+        return Err(anyhow::anyhow!(
+            "sort-merged tantivy index row count mismatch: tantivy={merged_docs}, source_files={expected_docs}",
+        ));
+    }
+
+    let puffin_bytes = out_dir.to_puffin_bytes()?;
+    let index_size = puffin_bytes.len();
+    let Some(idx_file_name) = to_tantivy_name(target_file_name) else {
+        return Err(anyhow::anyhow!(
+            "unable to derive tantivy index name from target file: {target_file_name}",
+        ));
+    };
+
+    let buf = Bytes::from(puffin_bytes);
+    if cfg.cache_latest_files.enabled
+        && cfg.cache_latest_files.cache_index
+        && cfg.cache_latest_files.download_from_node
+    {
+        infra::cache::file_data::disk::set(&idx_file_name, buf.clone()).await?;
+        log::info!("file: {idx_file_name} file_data::disk::set success");
+    }
+
+    let account = storage::get_account(org_id, target_file_name).unwrap_or_default();
+    match storage::put(&account, &idx_file_name, buf).await {
+        Ok(_) => {
+            log::info!(
+                "{caller} sort-merged {source_count} tantivy index files into: {idx_file_name}, size {index_size}, took: {} ms",
+                start.elapsed().as_millis()
+            );
+        }
+        Err(e) => {
+            log::error!("{caller} sort-merged tantivy index file error: {e}");
+            return Err(e.into());
+        }
+    }
+
     Ok(index_size)
 }
 
@@ -168,7 +300,9 @@ fn build_tantivy_schema(
                 .set_fieldnorms(false),
         )
         .set_fast(None);
-    for field in index_fields_filtered.iter() {
+    let mut index_fields_ordered = index_fields_filtered.iter().collect::<Vec<_>>();
+    index_fields_ordered.sort_unstable();
+    for field in index_fields_ordered {
         if field == TIMESTAMP_COL_NAME {
             continue;
         }
@@ -379,6 +513,56 @@ pub(super) mod tests {
             &batch.schema(),
         );
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_build_tantivy_schema_orders_index_fields_deterministically() {
+        let arrow_schema = Schema::new(vec![
+            Field::new(TIMESTAMP_COL_NAME, DataType::Int64, false),
+            Field::new("message", DataType::Utf8, false),
+            Field::new("z_field", DataType::Utf8, false),
+            Field::new("a_field", DataType::Utf8, false),
+            Field::new("m_field", DataType::Utf8, false),
+        ]);
+        let fts_fields = ["message".to_string()];
+        let schema_a = build_tantivy_schema(
+            &fts_fields,
+            &[
+                "z_field".to_string(),
+                "a_field".to_string(),
+                "m_field".to_string(),
+            ],
+            &arrow_schema,
+        )
+        .unwrap()
+        .schema;
+        let schema_b = build_tantivy_schema(
+            &fts_fields,
+            &[
+                "m_field".to_string(),
+                "z_field".to_string(),
+                "a_field".to_string(),
+            ],
+            &arrow_schema,
+        )
+        .unwrap()
+        .schema;
+
+        assert_eq!(schema_a, schema_b);
+        let field_names = schema_a
+            .fields()
+            .map(|(_, field_entry)| field_entry.name().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            field_names,
+            vec![
+                INDEX_FIELD_NAME_FOR_ALL,
+                "a_field",
+                "m_field",
+                "z_field",
+                TIMESTAMP_COL_NAME,
+            ]
+        );
     }
 
     #[tokio::test]

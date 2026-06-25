@@ -60,7 +60,7 @@ use crate::service::{
         exec::TableBuilder,
         merge::{self, MergeParquetResult},
     },
-    tantivy::create_tantivy_index,
+    tantivy::{create_tantivy_index, merge_tantivy_indices},
 };
 
 /// Generate merging job by stream
@@ -955,6 +955,7 @@ pub async fn merge_files(
                     &mut new_file_meta,
                     latest_schema.clone(),
                     buf,
+                    true,
                 )
                 .await?;
             }
@@ -1002,6 +1003,7 @@ pub async fn merge_files(
                         &mut new_file_meta,
                         latest_schema.clone(),
                         buf,
+                        false,
                     )
                     .await?;
                 }
@@ -1035,7 +1037,22 @@ async fn generate_inverted_index(
     new_file_meta: &mut FileMeta,
     latest_schema: Arc<Schema>,
     buf: Bytes,
+    try_sort_merge: bool,
 ) -> Result<(), anyhow::Error> {
+    if try_sort_merge && get_config().compact.tantivy_sort_merge_enabled {
+        match merge_tantivy_indices("COMPACTOR", org_id, new_file_key, retain_file_list).await {
+            Ok(index_size) => {
+                new_file_meta.index_size = index_size as i64;
+                return Ok(());
+            }
+            Err(e) => {
+                log::warn!(
+                    "sort-merge tantivy index failed for file: {new_file_key}, falling back to rebuild from data file: {e}"
+                );
+            }
+        }
+    }
+
     let index_size = create_tantivy_index(
         "COMPACTOR",
         org_id,
