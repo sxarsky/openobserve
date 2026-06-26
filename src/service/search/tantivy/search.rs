@@ -24,8 +24,8 @@ use config::{
     TIMESTAMP_COL_NAME,
     meta::inverted_index::{IndexOptimizeMode, MAX_SIMPLE_TOPN_FIELDS},
     tantivy::query::{
-        contains_query::ContainsAutomaton, ids_collector::SingleSegmentDocIdCollector,
-        topn_collector::TopNCollector,
+        contains_query::ContainsAutomaton, distinct_collector::SimpleDistinctCollector,
+        ids_collector::SingleSegmentDocIdCollector, topn_collector::TopNCollector,
     },
 };
 #[cfg(feature = "enterprise")]
@@ -262,46 +262,71 @@ impl TantivyResult {
 
     pub fn handle_simple_distinct(
         searcher: &Searcher,
+        query: Box<dyn Query>,
         index_condition: &IndexCondition,
         field: &str,
         limit: usize,
         ascend: bool,
+        file_in_range: bool,
     ) -> anyhow::Result<Self> {
-        let mut distinct_values: Vec<String> = Vec::with_capacity(limit * 4);
+        // partially-overlapping file: let the query (which carries the
+        // `_timestamp` range) drive a single filtered pass and collect the
+        // field's distinct values from the matched docs
+        if !file_in_range {
+            let distinct = searcher.search(
+                &query,
+                &SimpleDistinctCollector::new(field.to_string(), limit, ascend),
+            )?;
+            return Ok(Self::Distinct(distinct));
+        }
+
+        // fully-contained file: no timestamp filter needed, so stream the
+        // field's term dictionary directly — the terms are the distinct values,
+        // with no document access at all
         let field = searcher.schema().get_field(field).unwrap();
-        if let Some((value, case_sensitive)) = index_condition.get_str_match_condition() {
-            for seg in searcher.segment_readers() {
-                let index = seg.inverted_index(field).unwrap();
-                let mut terms = index
+        let Some(seg) = searcher.segment_readers().first() else {
+            return Ok(Self::Distinct(HashSet::new()));
+        };
+        let index = seg.inverted_index(field).unwrap();
+        let mut distinct_values = match index_condition.get_str_match_condition() {
+            Some((value, case_sensitive)) => {
+                let terms = index
                     .terms()
                     .search(ContainsAutomaton::new(&value, case_sensitive))
                     .into_stream()
                     .unwrap();
-                while let Some((term, _)) = terms.next() {
-                    if ascend && distinct_values.len() >= limit {
-                        break;
-                    }
-                    distinct_values.push(String::from_utf8(term.to_vec()).unwrap());
-                }
+                collect_distinct_terms(terms, limit, ascend)
             }
-        } else {
-            for seg in searcher.segment_readers() {
-                let index = seg.inverted_index(field).unwrap();
-                let mut terms = index.terms().stream().unwrap();
-                while let Some((term, _)) = terms.next() {
-                    if ascend && distinct_values.len() >= limit {
-                        break;
-                    }
-                    distinct_values.push(String::from_utf8(term.to_vec()).unwrap());
-                }
-            }
-        }
+            None => collect_distinct_terms(index.terms().stream().unwrap(), limit, ascend),
+        };
         if !ascend {
             distinct_values.reverse();
             distinct_values.truncate(limit);
         }
         Ok(Self::Distinct(distinct_values.into_iter().collect()))
     }
+}
+
+/// Streams a segment's term dictionary into the distinct values, with the
+/// ascending early-exit at `limit`. Shared by the str-match and unfiltered
+/// paths, which differ only in how the term stream is built.
+fn collect_distinct_terms<A>(
+    mut terms: tantivy::termdict::TermStreamer<'_, A>,
+    limit: usize,
+    ascend: bool,
+) -> Vec<String>
+where
+    A: tantivy_fst::Automaton,
+    A::State: Clone,
+{
+    let mut distinct_values: Vec<String> = Vec::with_capacity(limit * 4);
+    while let Some((term, _)) = terms.next() {
+        if ascend && distinct_values.len() >= limit {
+            break;
+        }
+        distinct_values.push(String::from_utf8(term.to_vec()).unwrap());
+    }
+    distinct_values
 }
 
 // TantivyMultiResultBuilder is used to build a TantivyMultiResult from multiple TantivyResult
@@ -471,8 +496,73 @@ mod tests {
     use std::collections::HashSet;
 
     use config::meta::inverted_index::IndexOptimizeMode;
+    use tantivy::{
+        Index, doc,
+        query::AllQuery,
+        schema::{FAST, IndexRecordOption, SchemaBuilder, TextFieldIndexing, TextOptions},
+    };
 
     use super::*;
+    use crate::service::search::index::{Condition, IndexCondition};
+
+    /// Builds a single-segment in-RAM index of `(timestamp, name)` rows, where
+    /// `name` is a raw-tokenized fast text field (so it has both an inverted
+    /// index to stream distinct terms from and an inverted index to read
+    /// postings from) and `_timestamp` is an i64 fast field.
+    fn build_distinct_index(rows: &[(i64, &str)]) -> Searcher {
+        let mut schema_builder = SchemaBuilder::new();
+        let ts = schema_builder.add_i64_field("_timestamp", FAST);
+        let name = schema_builder.add_text_field(
+            "name",
+            TextOptions::default()
+                .set_indexing_options(
+                    TextFieldIndexing::default()
+                        .set_index_option(IndexRecordOption::Basic)
+                        .set_tokenizer("raw"),
+                )
+                .set_fast(None),
+        );
+        let index = Index::create_in_ram(schema_builder.build());
+        let mut writer = index.writer_with_num_threads(1, 15_000_000).unwrap();
+        for (timestamp, value) in rows {
+            writer
+                .add_document(doc!(ts => *timestamp, name => *value))
+                .unwrap();
+        }
+        writer.commit().unwrap();
+        index.reader().unwrap().searcher()
+    }
+
+    fn condition_all() -> IndexCondition {
+        IndexCondition {
+            conditions: vec![Condition::All()],
+        }
+    }
+
+    #[test]
+    fn test_handle_simple_distinct_file_in_range_streams_terms() {
+        // fully-contained file: the term-dictionary path returns every distinct
+        // value; the query is unused on this path, so any query works
+        let searcher = build_distinct_index(&[(10, "a"), (20, "b"), (30, "c")]);
+        let result = TantivyResult::handle_simple_distinct(
+            &searcher,
+            Box::new(AllQuery),
+            &condition_all(),
+            "name",
+            10,
+            false,
+            true,
+        )
+        .unwrap();
+        let result = match result {
+            TantivyResult::Distinct(set) => set,
+            _ => panic!("expected Distinct"),
+        };
+        assert_eq!(
+            result,
+            HashSet::from(["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+    }
 
     #[test]
     fn test_tantivy_result_percent() {

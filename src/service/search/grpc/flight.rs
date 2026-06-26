@@ -269,7 +269,6 @@ pub async fn search(
             &mut storage_idx_optimize_rule, // pass by mutable reference
             file_list,
             index_updated_at,
-            query_params.time_range,
         )
         .await?;
         log::info!(
@@ -695,7 +694,6 @@ async fn handle_tantivy_optimize(
     idx_optimize_rule: &mut Option<IndexOptimizeMode>,
     file_list: Vec<FileKey>,
     index_updated_at: i64,
-    time_range: (i64, i64),
 ) -> Result<(Vec<FileKey>, Vec<FileKey>), Error> {
     // early return if not simple count, histogram or topn
     if !matches!(
@@ -711,18 +709,11 @@ async fn handle_tantivy_optimize(
 
     let index_updated_at = update_index_updated_at(idx_optimize_rule, index_updated_at).await;
 
-    // TODO: support IndexOptimizeMode::SimpleDistinct for add timestamp
-    // filter to tantivy search
-    let time_range = if matches!(
-        idx_optimize_rule,
-        Some(IndexOptimizeMode::SimpleDistinct(..))
-    ) {
-        Some(time_range)
-    } else {
-        None
-    };
+    // SimpleDistinct applies the timestamp filter inside the tantivy search
+    // (see `handle_simple_distinct`), so partially-overlapping files can also
+    // use the tantivy fast path instead of falling back to datafusion.
     let (tantivy_files, datafusion_files) =
-        split_file_list_by_time_range(file_list, index_updated_at, time_range);
+        split_file_list_by_time_range(file_list, index_updated_at);
     // set optimize rule to None, because datafusion should not use it
     *idx_optimize_rule = None;
 
@@ -752,14 +743,10 @@ async fn update_index_updated_at(
 fn split_file_list_by_time_range(
     file_list: Vec<FileKey>,
     index_updated_at: i64,
-    time_range: Option<(i64, i64)>,
 ) -> (Vec<FileKey>, Vec<FileKey>) {
-    file_list.into_iter().partition(|file| {
-        file.meta.min_ts >= index_updated_at
-            && file.meta.index_size > 0
-            && time_range
-                .is_none_or(|(start, end)| file.meta.min_ts >= start && file.meta.max_ts <= end)
-    })
+    file_list
+        .into_iter()
+        .partition(|file| file.meta.min_ts >= index_updated_at && file.meta.index_size > 0)
 }
 
 fn collect_stats(files: &[FileKey]) -> ScanStats {
@@ -811,7 +798,7 @@ mod tests {
 
     #[test]
     fn test_split_file_list_empty() {
-        let (tantivy, datafusion) = split_file_list_by_time_range(vec![], 0, None);
+        let (tantivy, datafusion) = split_file_list_by_time_range(vec![], 0);
         assert!(tantivy.is_empty());
         assert!(datafusion.is_empty());
     }
@@ -819,7 +806,7 @@ mod tests {
     #[test]
     fn test_split_file_list_all_tantivy() {
         let files = vec![make_file(100, 200, 512), make_file(300, 400, 1024)];
-        let (tantivy, datafusion) = split_file_list_by_time_range(files, 0, None);
+        let (tantivy, datafusion) = split_file_list_by_time_range(files, 0);
         assert_eq!(tantivy.len(), 2);
         assert!(datafusion.is_empty());
     }
@@ -827,7 +814,7 @@ mod tests {
     #[test]
     fn test_split_file_list_no_index_goes_to_datafusion() {
         let files = vec![make_file(100, 200, 0)]; // index_size == 0
-        let (tantivy, datafusion) = split_file_list_by_time_range(files, 0, None);
+        let (tantivy, datafusion) = split_file_list_by_time_range(files, 0);
         assert!(tantivy.is_empty());
         assert_eq!(datafusion.len(), 1);
     }
@@ -835,7 +822,7 @@ mod tests {
     #[test]
     fn test_split_file_list_before_index_updated_at() {
         let files = vec![make_file(100, 200, 512)];
-        let (tantivy, datafusion) = split_file_list_by_time_range(files, 500, None);
+        let (tantivy, datafusion) = split_file_list_by_time_range(files, 500);
         assert!(tantivy.is_empty());
         assert_eq!(datafusion.len(), 1);
     }

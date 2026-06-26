@@ -474,7 +474,7 @@ async fn search_tantivy_index(
     let need_all_term_fields = condition
         .need_all_term_fields()
         .into_iter()
-        .chain(get_simple_distinct_field(&idx_optimize_rule))
+        .chain(get_simple_distinct_field(&idx_optimize_rule, file_in_range))
         .filter_map(|filed| tantivy_schema.get_field(&filed).ok())
         .collect::<HashSet<_>>();
 
@@ -500,6 +500,9 @@ async fn search_tantivy_index(
                 for field in fields {
                     need_fast_field.insert(field.clone());
                 }
+            }
+            IndexOptimizeMode::SimpleDistinct(field, ..) if !file_in_range => {
+                need_fast_field.insert(field.clone());
             }
             _ => {}
         }
@@ -555,7 +558,15 @@ async fn search_tantivy_index(
             TantivyResult::handle_simple_top_n(&searcher, query, &fields, limit, ascend)
         }
         Some(IndexOptimizeMode::SimpleDistinct(field, limit, ascend)) => {
-            TantivyResult::handle_simple_distinct(&searcher, &condition, &field, limit, ascend)
+            TantivyResult::handle_simple_distinct(
+                &searcher,
+                query,
+                &condition,
+                &field,
+                limit,
+                ascend,
+                file_in_range,
+            )
         }
     })
     .await??;
@@ -661,9 +672,16 @@ fn build_row_ids_selection(
 }
 
 /// if simple distinct without filter, we need to warm up the field
-fn get_simple_distinct_field(idx_optimize_rule: &Option<IndexOptimizeMode>) -> Vec<String> {
+fn get_simple_distinct_field(
+    idx_optimize_rule: &Option<IndexOptimizeMode>,
+    file_in_range: bool,
+) -> Vec<String> {
     if let Some(IndexOptimizeMode::SimpleDistinct(field, ..)) = idx_optimize_rule {
-        vec![field.to_string()]
+        if file_in_range {
+            vec![field.to_string()]
+        } else {
+            vec![]
+        }
     } else {
         vec![]
     }
@@ -769,7 +787,7 @@ mod tests {
     #[test]
     fn test_get_simple_distinct_field_none() {
         let idx_optimize_rule = None;
-        let result = get_simple_distinct_field(&idx_optimize_rule);
+        let result = get_simple_distinct_field(&idx_optimize_rule, true);
         assert_eq!(result, Vec::<String>::new());
     }
 
@@ -782,14 +800,14 @@ mod tests {
                 false,
             ),
         );
-        let result = get_simple_distinct_field(&idx_optimize_rule);
+        let result = get_simple_distinct_field(&idx_optimize_rule, true);
         assert_eq!(result, vec!["test_field".to_string()]);
     }
 
     #[test]
     fn test_get_simple_distinct_field_other_mode() {
         let idx_optimize_rule = Some(config::meta::inverted_index::IndexOptimizeMode::SimpleCount);
-        let result = get_simple_distinct_field(&idx_optimize_rule);
+        let result = get_simple_distinct_field(&idx_optimize_rule, true);
         assert_eq!(result, Vec::<String>::new());
     }
 
