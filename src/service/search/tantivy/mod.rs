@@ -471,10 +471,16 @@ async fn search_tantivy_index(
         ]));
     }
 
+    // simple distinct streams the term dictionary only for fully-contained files
+    // (and unless forced onto the collector); otherwise it runs the collector,
+    // which reads the field's fast-field column instead
+    let distinct_term_dict =
+        file_in_range && !cfg.common.inverted_index_distinct_force_collector;
+
     let need_all_term_fields = condition
         .need_all_term_fields()
         .into_iter()
-        .chain(get_simple_distinct_field(&idx_optimize_rule, file_in_range))
+        .chain(get_simple_distinct_field(&idx_optimize_rule, distinct_term_dict))
         .filter_map(|filed| tantivy_schema.get_field(&filed).ok())
         .collect::<HashSet<_>>();
 
@@ -501,7 +507,7 @@ async fn search_tantivy_index(
                     need_fast_field.insert(field.clone());
                 }
             }
-            IndexOptimizeMode::SimpleDistinct(field, ..) if !file_in_range => {
+            IndexOptimizeMode::SimpleDistinct(field, ..) if !distinct_term_dict => {
                 need_fast_field.insert(field.clone());
             }
             _ => {}
@@ -672,18 +678,18 @@ fn build_row_ids_selection(
 }
 
 /// if simple distinct without filter, we need to warm up the field
+/// The simple-distinct field whose term dictionary + postings must be warmed,
+/// but only for the term-dictionary path; the collector path warms the field's
+/// fast-field column instead (see `need_fast_field`).
 fn get_simple_distinct_field(
     idx_optimize_rule: &Option<IndexOptimizeMode>,
-    file_in_range: bool,
+    term_dict_path: bool,
 ) -> Vec<String> {
-    if let Some(IndexOptimizeMode::SimpleDistinct(field, ..)) = idx_optimize_rule {
-        if file_in_range {
+    match idx_optimize_rule {
+        Some(IndexOptimizeMode::SimpleDistinct(field, ..)) if term_dict_path => {
             vec![field.to_string()]
-        } else {
-            vec![]
         }
-    } else {
-        vec![]
+        _ => vec![],
     }
 }
 

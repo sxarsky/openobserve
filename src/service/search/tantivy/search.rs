@@ -271,8 +271,13 @@ impl TantivyResult {
     ) -> anyhow::Result<Self> {
         // partially-overlapping file: let the query (which carries the
         // `_timestamp` range) drive a single filtered pass and collect the
-        // field's distinct values from the matched docs
-        if !file_in_range {
+        // field's distinct values from the matched docs. The force-collector
+        // flag takes this path even for fully-contained files (the query has no
+        // `_timestamp` range then, but every doc is in range anyway).
+        let force_collector = config::get_config()
+            .common
+            .inverted_index_distinct_force_collector;
+        if !file_in_range || force_collector {
             let distinct = searcher.search(
                 &query,
                 &SimpleDistinctCollector::new(field.to_string(), limit, ascend),

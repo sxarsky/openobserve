@@ -1283,6 +1283,14 @@ pub struct Common {
     )]
     pub inverted_index_count_optimizer_enabled: bool,
     #[env_config(
+        name = "ZO_INVERTED_INDEX_DISTINCT_FORCE_COLLECTOR",
+        default = false,
+        help = "Force simple distinct to always use the tantivy collector (per-doc scan) \
+                instead of streaming the term dictionary, even when the file is fully within \
+                the query time range."
+    )]
+    pub inverted_index_distinct_force_collector: bool,
+    #[env_config(
         name = "ZO_QUERY_ON_STREAM_SELECTION",
         default = true,
         help = "Toggle search to be trigger based on button click event."
