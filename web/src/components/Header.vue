@@ -95,9 +95,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         v-if="store.state.zoConfig.custom_hide_self_logo == false"
         class="logo-container tw:relative tw:inline-flex tw:items-center tw:min-h-10"
       >
+        <a :href="homeUrl" @click.prevent="goToHome" class="tw:inline-flex tw:items-center">
+          <img
+            data-test="header-openobserve-logo"
+            class="openobserve-logo tw:cursor-pointer tw:h-8 tw:max-w-[150px] tw:block tw:transition-opacity tw:duration-200 tw:hover:opacity-80"
+            :src="
+              getImageURL(
+                store.state.theme === 'dark'
+                  ? 'images/common/openobserve_latest_dark_2.svg'
+                  : 'images/common/openobserve_latest_light_2.svg',
+              )
+            "
+            alt="OpenObserve"
+          />
+        </a>
+      </div>
+    </div>
+
+    <!-- Default OpenObserve logo (when no custom logo) -->
+    <div v-else class="relative-position tw:relative tw:inline-flex tw:items-center tw:min-h-10">
+      <a :href="homeUrl" @click.prevent="goToHome" class="tw:inline-flex tw:items-center">
         <img
           data-test="header-openobserve-logo"
-          class="openobserve-logo tw:cursor-pointer tw:h-8 tw:max-w-[150px] tw:block tw:transition-opacity tw:duration-200 hover:tw:opacity-80"
+          class="openobserve-logo tw:cursor-pointer tw:h-8 tw:max-w-[150px] tw:block tw:transition-opacity tw:duration-200 tw:hover:opacity-80"
           :src="
             getImageURL(
               store.state.theme === 'dark'
@@ -105,27 +125,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 : 'images/common/openobserve_latest_light_2.svg',
             )
           "
-          @click="goToHome"
           alt="OpenObserve"
         />
-      </div>
-    </div>
-
-    <!-- Default OpenObserve logo (when no custom logo) -->
-    <div v-else class="tw:flex relative-position logo-container">
-      <img
-        data-test="header-openobserve-logo"
-        class="openobserve-logo tw:cursor-pointer tw:h-8 tw:max-w-[150px] tw:block tw:transition-opacity tw:duration-200 hover:tw:opacity-80"
-        :src="
-          getImageURL(
-            store.state.theme === 'dark'
-              ? 'images/common/openobserve_latest_dark_2.svg'
-              : 'images/common/openobserve_latest_light_2.svg',
-          )
-        "
-        @click="goToHome"
-        alt="OpenObserve"
-      />
+      </a>
     </div>
     </div><!-- end left side -->
 
@@ -415,6 +417,7 @@ size="xs" class="warning" />{{
 <script lang="ts">
 
 import { defineComponent, PropType, computed, ref, watch, nextTick } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import ThemeSwitcher from "./ThemeSwitcher.vue";
 import EnterpriseUpgradeDialog from "./EnterpriseUpgradeDialog.vue";
@@ -526,6 +529,16 @@ export default defineComponent({
   ],
   setup(props, { emit }) {
     const { t } = useI18n();
+    const router = useRouter();
+
+    const homeUrl = computed(() => {
+      return router.resolve({
+        path: "/",
+        query: {
+          org_identifier: props.store.state.selectedOrganization?.identifier,
+        },
+      }).href;
+    });
 
     // Enterprise upgrade dialog state
     const showEnterpriseDialog = ref(false);
@@ -626,6 +639,7 @@ export default defineComponent({
     return {
       t,
       getImageURL,
+      homeUrl,
       enterpriseButtonText,
       ingestionQuotaPercentage,
       ingestionQuotaColor,
