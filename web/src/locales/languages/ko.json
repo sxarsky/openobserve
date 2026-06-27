@@ -1016,7 +1016,8 @@
     "subscription_plan": "서브스크립션 플랜",
     "makeBilledMember": "이 조직을 {org} 의 결제 회원으로 설정",
     "manage": "관리",
-    "nameHelpText": "영숫자, 공백 및 밑줄만 사용하십시오."
+    "nameHelpText": "영숫자, 공백 및 밑줄만 사용하십시오.",
+    "orgBeingDeletedSwitching": "이 조직은 삭제되고 있습니다.다른 조직으로 전환합니다."
   },
   "template": {
     "header": "템플릿",
@@ -3144,7 +3145,12 @@
     "queryManagementDesc": "실행 중인 쿼리 검사 및 취소",
     "nodesDesc": "클러스터 노드 및 상태",
     "licenseDesc": "엔터프라이즈 라이선스 세부 정보",
-    "organizationManagementDesc": "조직 생성 및 관리"
+    "organizationManagementDesc": "조직 생성 및 관리",
+    "dangerZone": "위험 지대",
+    "deleteOrganization": "조직 삭제",
+    "deleteOrganizationDescription": "이 조직과 모든 데이터를 영구적으로 삭제합니다.이 작업은 취소할 수 없습니다.",
+    "deleteOrganizationConfirm": "정말로 “{name}”을 삭제하시겠습니까?이렇게 하면 모든 데이터가 영구적으로 제거되며 되돌릴 수 없습니다.",
+    "deleteOrganizationInitiated": "조직 삭제가 시작되었습니다."
   },
   "iam": {
     "users": "유저",

@@ -1016,7 +1016,8 @@
     "subscription_plan": "Abonelik Planı",
     "makeBilledMember": "Bu Kuruluşu {org} Faturalandırma Üyesi Yapın",
     "manage": "Yönetmek",
-    "nameHelpText": "Yalnızca alfanümerik karakterler, boşluk ve alt çizgi kullanın."
+    "nameHelpText": "Yalnızca alfanümerik karakterler, boşluk ve alt çizgi kullanın.",
+    "orgBeingDeletedSwitching": "Bu kuruluş siliniyor. Sizi başka bir organizasyona yönlendiriyoruz."
   },
   "template": {
     "header": "Şablonlar",
@@ -3144,7 +3145,12 @@
     "queryManagementDesc": "Çalışan sorguları inceleyin ve iptal edin",
     "nodesDesc": "Küme düğümleri ve durumları",
     "licenseDesc": "Kurumsal lisans ayrıntıları",
-    "organizationManagementDesc": "Organizasyon oluşturun ve yönetin"
+    "organizationManagementDesc": "Organizasyon oluşturun ve yönetin",
+    "dangerZone": "Tehlike Bölgesi",
+    "deleteOrganization": "Kuruluşu sil",
+    "deleteOrganizationDescription": "Bu kuruluşu ve tüm verilerini kalıcı olarak silin. Bu işlem geri alınamaz.",
+    "deleteOrganizationConfirm": "“{name}” silmek istediğinizden emin misiniz? Bu, tüm verileri kalıcı olarak kaldırır ve geri alınamaz.",
+    "deleteOrganizationInitiated": "Kuruluş silme işlemi başlatıldı."
   },
   "iam": {
     "users": "Kullanıcılar",

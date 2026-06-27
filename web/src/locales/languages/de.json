@@ -1016,7 +1016,8 @@
     "subscription_plan": "Abonnementplan",
     "makeBilledMember": "Diese Organisation zu einem Rechnungsmitglied von {org} machen",
     "manage": "Managen",
-    "nameHelpText": "Verwenden Sie nur alphanumerische Zeichen, Leerzeichen und Unterstriche."
+    "nameHelpText": "Verwenden Sie nur alphanumerische Zeichen, Leerzeichen und Unterstriche.",
+    "orgBeingDeletedSwitching": "Diese Organisation wird gelöscht. Sie zu einer anderen Organisation wechseln."
   },
   "template": {
     "header": "Vorlagen",
@@ -3130,7 +3131,12 @@
     "queryManagementDesc": "Laufende Abfragen prüfen und abbrechen",
     "nodesDesc": "Cluster-Knoten und deren Zustand",
     "licenseDesc": "Details zur Enterprise-Lizenz",
-    "organizationManagementDesc": "Organisationen erstellen und verwalten"
+    "organizationManagementDesc": "Organisationen erstellen und verwalten",
+    "dangerZone": "Gefahrenzone",
+    "deleteOrganization": "Organisation löschen",
+    "deleteOrganizationDescription": "Löschen Sie diese Organisation und alle ihre Daten dauerhaft. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteOrganizationConfirm": "Bist du sicher, dass du „{name}“ löschen möchtest? Dadurch werden alle Daten dauerhaft entfernt und können nicht rückgängig gemacht werden.",
+    "deleteOrganizationInitiated": "Das Löschen der Organisation wurde eingeleitet."
   },
   "iam": {
     "users": "Nutzer",

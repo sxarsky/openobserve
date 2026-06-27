@@ -1016,7 +1016,8 @@
     "subscription_plan": "Piano di abbonamento",
     "makeBilledMember": "Rendi questa organizzazione un membro di fatturazione di {org}",
     "manage": "Gestisci",
-    "nameHelpText": "Usa solo caratteri alfanumerici, spazi e trattini bassi."
+    "nameHelpText": "Usa solo caratteri alfanumerici, spazi e trattini bassi.",
+    "orgBeingDeletedSwitching": "Questa organizzazione viene eliminata. Passaggio a un'altra organizzazione."
   },
   "template": {
     "header": "Modelli",
@@ -3142,7 +3143,12 @@
     "queryManagementDesc": "Ispeziona e annulla le query in esecuzione",
     "nodesDesc": "Nodi del cluster e relativo stato",
     "licenseDesc": "Dettagli della licenza Enterprise",
-    "organizationManagementDesc": "Crea e gestisci le organizzazioni"
+    "organizationManagementDesc": "Crea e gestisci le organizzazioni",
+    "dangerZone": "Zona di pericolo",
+    "deleteOrganization": "Elimina organizzazione",
+    "deleteOrganizationDescription": "Elimina definitivamente questa organizzazione e tutti i suoi dati. Questa azione non può essere annullata.",
+    "deleteOrganizationConfirm": "Sei sicuro di voler eliminare «{name}»? Questa operazione rimuoverà definitivamente tutti i dati e non può essere annullata.",
+    "deleteOrganizationInitiated": "L'eliminazione dell'organizzazione è iniziata."
   },
   "iam": {
     "users": "Utenti",

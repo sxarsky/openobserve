@@ -1033,7 +1033,8 @@
     "subscription_plan": "サブスクリプションプラン",
     "makeBilledMember": "この組織を {org} の請求メンバーにする",
     "manage": "管理",
-    "nameHelpText": "英数字、スペース、アンダースコアのみを使用してください。"
+    "nameHelpText": "英数字、スペース、アンダースコアのみを使用してください。",
+    "orgBeingDeletedSwitching": "この組織は削除されています。別の組織に切り替えます。"
   },
   "template": {
     "header": "テンプレート",
@@ -3151,7 +3152,12 @@
     "queryManagementDesc": "実行中のクエリの確認とキャンセル",
     "nodesDesc": "クラスターノードとそのヘルス状態",
     "licenseDesc": "エンタープライズライセンスの詳細",
-    "organizationManagementDesc": "組織の作成と管理"
+    "organizationManagementDesc": "組織の作成と管理",
+    "dangerZone": "デンジャー・ゾーン",
+    "deleteOrganization": "組織を削除",
+    "deleteOrganizationDescription": "この組織とそのすべてのデータを完全に削除します。このアクションは元に戻せません。",
+    "deleteOrganizationConfirm": "「{name}」を削除してよろしいですか？これによりすべてのデータが完全に削除され、元に戻すことはできません。",
+    "deleteOrganizationInitiated": "組織の削除が開始されました。"
   },
   "iam": {
     "users": "ユーザー",

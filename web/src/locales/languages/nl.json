@@ -1016,7 +1016,8 @@
     "subscription_plan": "Abonnementsplan",
     "makeBilledMember": "Maak van deze organisatie een factureringslid van {org}",
     "manage": "Beheren",
-    "nameHelpText": "Gebruik alleen alfanumerieke tekens, spaties en onderstrepingstekens."
+    "nameHelpText": "Gebruik alleen alfanumerieke tekens, spaties en onderstrepingstekens.",
+    "orgBeingDeletedSwitching": "Deze organisatie wordt verwijderd. Je overzetten naar een andere organisatie."
   },
   "template": {
     "header": "Sjablonen",
@@ -3144,7 +3145,12 @@
     "queryManagementDesc": "Lopende query's inspecteren en annuleren",
     "nodesDesc": "Clusternodes en hun status",
     "licenseDesc": "Details van enterprise-licentie",
-    "organizationManagementDesc": "Organisaties aanmaken en beheren"
+    "organizationManagementDesc": "Organisaties aanmaken en beheren",
+    "dangerZone": "Gevaarzone",
+    "deleteOrganization": "Organisatie verwijderen",
+    "deleteOrganizationDescription": "Deze organisatie en al haar gegevens definitief verwijderen. Deze actie kan niet ongedaan worden gemaakt.",
+    "deleteOrganizationConfirm": "Weet je zeker dat je „{name}” wilt verwijderen? Hiermee worden alle gegevens permanent verwijderd en kunnen ze niet ongedaan worden gemaakt.",
+    "deleteOrganizationInitiated": "De verwijdering van de organisatie is gestart."
   },
   "iam": {
     "users": "Gebruikers",

@@ -1016,7 +1016,8 @@
     "subscription_plan": "Plan de suscripción",
     "makeBilledMember": "Haga de esta organización un miembro de facturación de {org}",
     "manage": "Administrar",
-    "nameHelpText": "Utilice únicamente caracteres alfanuméricos, espacios y guiones bajos."
+    "nameHelpText": "Utilice únicamente caracteres alfanuméricos, espacios y guiones bajos.",
+    "orgBeingDeletedSwitching": "Se va a eliminar esta organización. Te estoy cambiando a otra organización."
   },
   "template": {
     "header": "Plantillas",
@@ -3128,7 +3129,12 @@
     "queryManagementDesc": "Inspecciona y cancela consultas en ejecución",
     "nodesDesc": "Nodos del clúster y su estado",
     "licenseDesc": "Detalles de la licencia Enterprise",
-    "organizationManagementDesc": "Crea y gestiona organizaciones"
+    "organizationManagementDesc": "Crea y gestiona organizaciones",
+    "dangerZone": "Zona de peligro",
+    "deleteOrganization": "Eliminar organización",
+    "deleteOrganizationDescription": "Elimine permanentemente esta organización y todos sus datos. Esta acción no se puede deshacer.",
+    "deleteOrganizationConfirm": "¿Estás seguro de que quieres eliminar «{name}»? De este modo, se eliminarán todos los datos de forma permanente y no se podrá deshacer.",
+    "deleteOrganizationInitiated": "Se inició la eliminación de la organización."
   },
   "iam": {
     "users": "Usuarios",

@@ -1016,7 +1016,8 @@
     "subscription_plan": "订阅计划",
     "makeBilledMember": "将此组织设为 {org} 的计费会员",
     "manage": "管理",
-    "nameHelpText": "仅使用字母数字字符、空格和下划线。"
+    "nameHelpText": "仅使用字母数字字符、空格和下划线。",
+    "orgBeingDeletedSwitching": "该组织正在被删除。将你切换到另一个组织。"
   },
   "template": {
     "header": "模板",
@@ -3130,7 +3131,12 @@
     "queryManagementDesc": "检查并取消正在运行的查询",
     "nodesDesc": "集群节点及其健康状况",
     "licenseDesc": "企业版许可证详情",
-    "organizationManagementDesc": "创建和管理组织"
+    "organizationManagementDesc": "创建和管理组织",
+    "dangerZone": "危险地带",
+    "deleteOrganization": "删除组织",
+    "deleteOrganizationDescription": "永久删除该组织及其所有数据。此操作无法撤消。",
+    "deleteOrganizationConfirm": "您确定要删除 “{name}” 吗？这将永久删除所有数据，无法撤消。",
+    "deleteOrganizationInitiated": "组织删除已启动。"
   },
   "iam": {
     "users": "用户",
