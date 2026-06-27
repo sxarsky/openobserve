@@ -314,10 +314,13 @@ export default defineComponent({
               timeout: 0,
 });
       loading.value = true;
-      organizationsService.list(0, 1000000, "name", false, "").then((res) => {
-        // Updating store so that organizations in navbar also gets updated
-        store.dispatch("setOrganizations", res.data.data);
-
+      // The _meta IAM Organizations page is the admin view: it must show ALL orgs,
+      // including those being deleted (status="deleting"), so admins can track
+      // deletion progress. The dedicated _meta endpoint (all_organizations) returns
+      // them with status; the regular /api/organizations list intentionally hides
+      // deleting orgs (that one feeds the navbar switcher). We deliberately do NOT
+      // dispatch setOrganizations here, so the switcher keeps its own filtered list.
+      organizationsService.get_admin_org("_meta").then((res) => {
         let counter = 1;
         const billingPlans = {
           "0": "Free",

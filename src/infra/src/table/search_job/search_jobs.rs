@@ -25,9 +25,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     super::{
         entity::{
-            search_job_partitions::{
-                Column as PartitionJobColumn, Entity as PartitionJobEntity,
-            },
+            search_job_partitions::{Column as PartitionJobColumn, Entity as PartitionJobEntity},
             search_job_results::{
                 ActiveModel as JobResultModel, Column as JobResultColumn, Entity as JobResultEntity,
             },

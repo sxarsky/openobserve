@@ -122,6 +122,14 @@ pub async fn organizations(
     };
 
     for org in all_orgs {
+        // Hide orgs that are being deleted from the regular org list (switcher).
+        // _meta admins inspect deleting orgs via the dedicated all_organizations
+        // endpoint instead. This prevents navigation into an org whose data has
+        // already started being torn down.
+        #[cfg(feature = "cloud")]
+        if crate::service::db::org_status::is_deleting(&org.identifier) {
+            continue;
+        }
         id += 1;
         #[cfg(feature = "cloud")]
         let org_subscription: i32 = all_subscriptions
@@ -239,6 +247,7 @@ pub async fn all_organizations(
                 .map(|(_, _, provider)| provider.clone())
                 .unwrap_or_default(),
             org_storage_enabled: settings.org_storage_enabled,
+            status: org.status.clone(),
         };
         if !org_names.contains(&org.identifier) {
             org_names.insert(org.identifier.clone());
@@ -1269,20 +1278,20 @@ pub async fn initiate_org_deletion(
     Headers(user_email): Headers<UserEmail>,
     Path(org_id): Path<String>,
 ) -> Response {
-    // Only root users or org admins with OpenFGA DELETE permission may delete an org.
-    if !check_permissions(
-        &org_id,
-        &org_id,
-        &user_email.user_id,
-        "organizations",
-        "DELETE",
-        None,
-        false,
-        false,
-        false,
-    )
-    .await
-    {
+    use config::meta::user::UserRole;
+
+    // Cloud authorization for self-service org deletion is intentionally NOT
+    // routed through OpenFGA: cloud orgs are frequently created without per-org
+    // `admin` membership tuples (org creation bypasses the OFGA POST check), so
+    // an OFGA `organizations:DELETE` check would 403 legitimate org admins.
+    // Instead, gate on the DB-resolved membership role for this org: allow root
+    // users (members of no org) and users whose role in *this* org is Admin.
+    let allowed = is_root_user(&user_email.user_id)
+        || matches!(
+            crate::service::users::get_user(Some(&org_id), &user_email.user_id).await,
+            Some(user) if user.role == UserRole::Admin
+        );
+    if !allowed {
         return MetaHttpResponse::forbidden("Not allowed");
     }
 

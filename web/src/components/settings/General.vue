@@ -373,6 +373,38 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
       </div>
     </div>
+
+    <!-- Danger Zone: delete this organization (owner/admin only).
+         Backend gate is the per-org RBAC check on DELETE /api/{org_id}/organizations;
+         this UI gate just hides the action for non-admins of the current org. -->
+    <div
+      id="dangerZone"
+      v-if="canDeleteOrg"
+      data-test="general-settings-danger-zone"
+    >
+      <div class="tw:py-2">
+        <GroupHeader :title="t('settings.dangerZone')" :showIcon="false" />
+      </div>
+      <div class="settings-grid-item no-border-bottom">
+        <span class="individual-setting-title">
+          {{ t("settings.deleteOrganization") }}
+        </span>
+        <div class="tw:flex tw:justify-start">
+          <OButton
+            data-test="general-settings-delete-org-btn"
+            variant="destructive"
+            size="sm-action"
+            :loading="deleting"
+            @click="confirmDeleteOrg = true"
+          >
+            {{ t("settings.deleteOrganization") }}
+          </OButton>
+        </div>
+        <span class="individual-setting-description">
+          {{ t("settings.deleteOrganizationDescription") }}
+        </span>
+      </div>
+    </div>
   </div>
   <OSpinner
     v-if="loadingState"
@@ -402,16 +434,37 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   >
     <OColor v-model="tempColor" @update:model-value="updateCustomColor" />
   </ODialog>
+
+  <ODialog
+    data-test="general-delete-org-dialog"
+    v-model:open="confirmDeleteOrg"
+    size="sm"
+    :title="t('settings.deleteOrganization')"
+    :secondary-button-label="t('confirmDialog.cancel')"
+    :primary-button-label="t('confirmDialog.ok')"
+    @click:secondary="confirmDeleteOrg = false"
+    @click:primary="deleteOrg"
+  >
+    <p>
+      {{
+        t("settings.deleteOrganizationConfirm", {
+          name: store.state.selectedOrganization?.label ||
+            store.state.selectedOrganization?.identifier,
+        })
+      }}
+    </p>
+  </ODialog>
 </template>
 
 <script lang="ts">
 // @ts-ignore
-import { defineComponent, onActivated, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineComponent, onActivated, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
 import { useLoading } from "@/composables/useLoading";
 import organizations from "@/services/organizations";
+import usersService from "@/services/users";
 import settingsService from "@/services/settings";
 import config from "@/aws-exports";
 import configService from "@/services/config";
@@ -560,9 +613,71 @@ export default defineComponent({
       }
     };
 
+    // ===== Delete organization (Danger Zone) =====
+    // The current user's role in the *currently selected* org. Sourced the same
+    // way IAM Users page does it: match our email in the org members list.
+    const currentUserRole = ref("");
+    const confirmDeleteOrg = ref(false);
+    const deleting = ref(false);
+
+    // Only cloud builds expose self-service org deletion. Backend enforces the
+    // real per-org RBAC check; this only governs visibility.
+    const canDeleteOrg = computed(() => {
+      if (config.isCloud !== "true") return false;
+      const role = currentUserRole.value?.toLowerCase();
+      return role === "root" || role === "admin";
+    });
+
+    const fetchCurrentUserRole = async () => {
+      const orgId = store.state.selectedOrganization?.identifier;
+      if (!orgId || config.isCloud !== "true") return;
+      try {
+        const res = await usersService.orgUsers(orgId);
+        const me = store.state.userInfo?.email?.toLowerCase();
+        const members = res.data?.data || [];
+        const mine = members.find(
+          (m: any) => m.email?.toLowerCase() === me,
+        );
+        currentUserRole.value = mine?.role?.toLowerCase() || "";
+      } catch {
+        // On error, leave role empty -> button stays hidden.
+        currentUserRole.value = "";
+      }
+    };
+
+    const deleteOrg = async () => {
+      const org = store.state.selectedOrganization;
+      const orgId = org?.identifier;
+      if (!orgId) return;
+      deleting.value = true;
+      try {
+        await organizations.delete_org(orgId);
+        confirmDeleteOrg.value = false;
+        toast({
+          variant: "success",
+          message: t("settings.deleteOrganizationInitiated"),
+        });
+      } catch (e: any) {
+        toast({
+          variant: "error",
+          message:
+            e?.response?.data?.message ||
+            e?.message ||
+            t("settings.somethingWentWrong"),
+        });
+      } finally {
+        deleting.value = false;
+      }
+    };
+
+    onMounted(() => {
+      fetchCurrentUserRole();
+    });
+
     onActivated(() => {
       // Initialize from store on mount
       updateFromStore();
+      fetchCurrentUserRole();
     });
 
     // Watch for changes in organization settings (backend config)
@@ -1072,6 +1187,11 @@ export default defineComponent({
       updateCustomColor,
       resetThemeColors,
       currentPickerMode,
+      // Delete organization (Danger Zone)
+      canDeleteOrg,
+      confirmDeleteOrg,
+      deleting,
+      deleteOrg,
     };
   },
 });

@@ -22,64 +22,106 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     data-test="org-cleanup-tasks-dialog"
     @update:open="$emit('update:open', $event)"
   >
-    <template #body>
-      <div class="tw:space-y-1">
-        <!-- Header row -->
-        <div class="tw:grid tw:grid-cols-[1fr_auto_auto] tw:gap-x-4 tw:text-xs tw:font-medium tw:text-text-secondary tw:px-2 tw:pb-1 tw:border-b tw:border-border-default">
-          <span>Step</span>
-          <span class="tw:text-right">Attempts</span>
-          <span class="tw:w-20 tw:text-right">Status</span>
+    <!-- ODialog has no #body slot; content goes in the default slot -->
+    <div>
+      <!-- Progress header: overall state chip + bar -->
+      <div v-if="tasks.length" class="tw:mb-4">
+        <div class="tw:flex tw:items-center tw:justify-between tw:mb-2">
+          <span class="tw:text-sm tw:font-medium tw:text-text-primary">
+            {{ doneCount }} of {{ tasks.length }} steps complete
+          </span>
+          <OBadge
+            :variant="overallStatus === 'completed' ? 'success-soft' : overallStatus === 'failed' ? 'error-soft' : 'primary-soft'"
+            size="sm"
+          >
+            <OIcon
+              v-if="overallStatus === 'in_progress'"
+              name="autorenew"
+              size="xs"
+              class="tw:mr-1 tw:animate-spin"
+            />
+            {{ overallStatus === 'completed' ? 'Completed' : overallStatus === 'failed' ? 'Failed' : 'In progress' }}
+          </OBadge>
         </div>
+        <OProgressBar :value="progressValue" :variant="progressBarVariant" size="sm" />
+      </div>
 
-        <!-- Loading -->
-        <div v-if="loading && !tasks.length" class="tw:py-8 tw:text-center tw:text-text-secondary tw:text-sm">
-          Loading…
-        </div>
+      <!-- Loading -->
+      <div v-if="loading && !tasks.length" class="tw:py-8 tw:text-center tw:text-text-secondary tw:text-sm">
+        Loading…
+      </div>
 
-        <!-- Empty -->
-        <div v-else-if="!tasks.length" class="tw:py-8 tw:text-center tw:text-text-secondary tw:text-sm">
-          No cleanup tasks found for this organization.
-        </div>
+      <!-- Empty -->
+      <div v-else-if="!tasks.length" class="tw:py-8 tw:text-center tw:text-text-secondary tw:text-sm">
+        No cleanup tasks found for this organization.
+      </div>
 
-        <!-- Task rows -->
+      <!-- Task rows -->
+      <div v-else class="tw:space-y-1.5">
         <div
           v-for="task in sortedTasks"
           :key="task.id"
-          class="tw:grid tw:grid-cols-[1fr_auto_auto] tw:gap-x-4 tw:items-center tw:px-2 tw:py-2 tw:rounded tw:text-sm"
-          :class="{
-            'tw:bg-surface-secondary': task.status === 'running',
-          }"
+          class="tw:flex tw:flex-col tw:gap-1 tw:px-3 tw:py-2 tw:rounded"
+          :class="rowAccentClass(task.status)"
         >
-          <!-- Step name -->
-          <div class="tw:flex tw:flex-col tw:gap-0.5">
-            <span class="tw:font-medium tw:text-text-primary">{{ formatStepName(task.step) }}</span>
-            <span v-if="task.last_error" class="tw:text-xs tw:text-error tw:truncate" :title="task.last_error">
-              {{ task.last_error }}
+          <div class="tw:flex tw:items-center tw:gap-3">
+            <!-- Status icon -->
+            <OIcon
+              :name="statusIcon(task.status)"
+              size="sm"
+              :class="{
+                'tw:text-success': task.status === 'done',
+                'tw:text-primary tw:animate-spin': task.status === 'running',
+                'tw:text-error': task.status === 'failed',
+                'tw:text-text-secondary': task.status === 'pending',
+              }"
+            />
+
+            <!-- Step name -->
+            <span class="tw:flex-1 tw:font-medium tw:text-sm tw:text-text-primary tw:min-w-0 tw:truncate">
+              {{ formatStepName(task.step) }}
             </span>
-          </div>
 
-          <!-- Attempts -->
-          <span class="tw:text-text-secondary tw:text-xs tw:text-right tabular-nums">
-            {{ task.attempts }}
-          </span>
+            <!-- Attempts (only when relevant) -->
+            <span
+              v-if="task.attempts > 0"
+              class="tw:text-text-secondary tw:text-xs tabular-nums tw:whitespace-nowrap"
+              :title="`${task.attempts} attempt(s)`"
+            >
+              {{ task.attempts }}×
+            </span>
 
-          <!-- Status badge -->
-          <div class="tw:w-20 tw:flex tw:justify-end">
-            <OBadge :variant="badgeVariant(task.status)" size="sm">
+            <!-- Status badge -->
+            <OBadge :variant="badgeVariant(task.status)" size="sm" class="tw:whitespace-nowrap">
               {{ task.status }}
             </OBadge>
+          </div>
+
+          <!-- Error message — full, wrapping, contained (no cut-off) -->
+          <div
+            v-if="task.last_error"
+            class="tw:ml-8 tw:text-xs tw:text-error tw:bg-surface-secondary tw:rounded tw:px-2 tw:py-1 tw:break-words tw:whitespace-pre-wrap"
+          >
+            {{ task.last_error }}
           </div>
         </div>
       </div>
 
-      <!-- Summary footer -->
-      <div v-if="tasks.length" class="tw:mt-4 tw:pt-3 tw:border-t tw:border-border-default tw:flex tw:items-center tw:justify-between tw:text-xs tw:text-text-secondary">
-        <span>{{ doneCount }} / {{ tasks.length }} steps complete</span>
-        <span v-if="isComplete" class="tw:text-success tw:font-medium">All done</span>
-        <span v-else-if="hasFailed" class="tw:text-error">{{ failedCount }} step(s) failed permanently</span>
-        <span v-else class="tw:animate-pulse">In progress — refreshing every 5s</span>
+      <!-- Refresh hint while in progress -->
+      <div
+        v-if="tasks.length && overallStatus === 'in_progress'"
+        class="tw:mt-3 tw:text-xs tw:text-text-secondary tw:flex tw:items-center tw:gap-1.5"
+      >
+        <OIcon name="autorenew" size="xs" class="tw:animate-spin" />
+        <span>Refreshing every 5s…</span>
       </div>
-    </template>
+      <div
+        v-else-if="tasks.length && overallStatus === 'failed'"
+        class="tw:mt-3 tw:text-xs tw:text-error"
+      >
+        {{ failedCount }} step(s) failed permanently — deletion is blocked until resolved.
+      </div>
+    </div>
 
     <template #footer>
       <OButton variant="outline" size="sm" @click="$emit('update:open', false)">
@@ -99,6 +141,7 @@ import ODialog from "@/lib/overlay/Dialog/ODialog.vue";
 import OButton from "@/lib/core/Button/OButton.vue";
 import OBadge from "@/lib/core/Badge/OBadge.vue";
 import OIcon from "@/lib/core/Icon/OIcon.vue";
+import OProgressBar from "@/lib/data/ProgressBar/OProgressBar.vue";
 import organizationsService from "@/services/organizations";
 import type { BadgeVariant } from "@/lib/core/Badge/OBadge.types";
 
@@ -117,7 +160,7 @@ interface CleanupTask {
 
 export default defineComponent({
   name: "OrgCleanupTasksDialog",
-  components: { ODialog, OButton, OBadge, OIcon },
+  components: { ODialog, OButton, OBadge, OIcon, OProgressBar },
   props: {
     open: { type: Boolean, required: true },
     orgId: { type: String, required: true },
@@ -148,6 +191,52 @@ export default defineComponent({
     );
 
     const hasFailed = computed(() => failedCount.value > 0 && isComplete.value === false);
+
+    // Progress fraction (0–1) for the bar.
+    const progressValue = computed(() =>
+      tasks.value.length ? doneCount.value / tasks.value.length : 0
+    );
+
+    // Overall state: completed / failed / in-progress — drives the header chip + bar colour.
+    const overallStatus = computed<"completed" | "failed" | "in_progress">(() => {
+      if (isComplete.value) return "completed";
+      if (hasFailed.value) return "failed";
+      return "in_progress";
+    });
+
+    const progressBarVariant = computed<"default" | "warning" | "danger">(() => {
+      if (overallStatus.value === "completed") return "default";
+      if (overallStatus.value === "failed") return "danger";
+      return "default";
+    });
+
+    // Per-row left accent tint by status — gives a quick visual scan.
+    const rowAccentClass = (status: string): string => {
+      switch (status) {
+        case "done":
+          return "tw:border tw:border-border-default";
+        case "running":
+          return "tw:border tw:border-border-default tw:bg-surface-secondary";
+        case "failed":
+          return "tw:border tw:border-error";
+        default:
+          return "tw:border tw:border-border-default";
+      }
+    };
+
+    // Status icon name per state.
+    const statusIcon = (status: string): string => {
+      switch (status) {
+        case "done":
+          return "check_circle";
+        case "running":
+          return "autorenew";
+        case "failed":
+          return "error";
+        default:
+          return "schedule"; // pending
+      }
+    };
 
     const fetchTasks = async () => {
       if (!props.orgId) return;
@@ -223,6 +312,11 @@ export default defineComponent({
       failedCount,
       isComplete,
       hasFailed,
+      progressValue,
+      overallStatus,
+      progressBarVariant,
+      rowAccentClass,
+      statusIcon,
       fetchTasks,
       formatStepName,
       badgeVariant,

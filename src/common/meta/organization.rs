@@ -179,6 +179,10 @@ pub struct AllOrgListDetails {
     #[serde(default)]
     pub billing_provider: String,
     pub org_storage_enabled: bool,
+    /// Org lifecycle status, e.g. "active" or "deleting". Drives the _meta
+    /// "View deletion progress" affordance in the UI.
+    #[serde(default)]
+    pub status: String,
 }
 
 #[derive(Serialize, ToSchema)]

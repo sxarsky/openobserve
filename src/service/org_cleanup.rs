@@ -291,27 +291,13 @@ async fn step_delete_stream(org_id: &str, type_and_name: &str) -> Result<(), any
 
     let stream_type = StreamType::from(stream_type_str);
 
-    // Delete storage files in a loop to handle large streams
-    loop {
-        let files =
-            infra::file_list::query_for_dump(org_id, stream_type, stream_name, (0, i64::MAX))
-                .await?;
-        if files.is_empty() {
-            break;
-        }
-        for chunk in files.chunks(1000) {
-            let paths: Vec<(&str, &str)> = chunk
-                .iter()
-                .map(|f| (f.account.as_str(), f.file.as_str()))
-                .collect();
-            infra::storage::del(paths).await?;
-            for f in chunk {
-                infra::file_list::remove(&f.file).await?;
-            }
-        }
-    }
+    // Reuse the compactor's stream-deletion primitive instead of hand-rolling a
+    // file_list scan. It removes local-disk files, file_list rows, and dump files
+    // over the canonical (BASE_TIME, now) range — avoiding the invalid/overflowing
+    // (0, i64::MAX) range that query_for_dump rejects.
+    crate::service::compact::retention::delete_all(org_id, stream_type, stream_name).await?;
 
-    // Delete the schema entry
+    // Delete the schema entry (delete_all removes data, not the stream definition).
     crate::service::db::schema::delete(org_id, stream_name, Some(stream_type)).await?;
 
     Ok(())
@@ -332,7 +318,8 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
     };
 
     // FK-constrained children must be deleted before their parents.
-    // Order: timed_annotations → dashboards → folders (join chain: folders→dashboards→timed_annotations)
+    // Order: timed_annotations → dashboards → folders (join chain:
+    // folders→dashboards→timed_annotations)
     alert_incidents::delete_by_org(org_id)
         .await
         .map_err(|e| anyhow::anyhow!("step_delete_db_resources/alert_incidents: {e}"))?;
@@ -411,10 +398,17 @@ async fn step_delete_db_resources(org_id: &str) -> Result<(), anyhow::Error> {
         infra::pipeline::delete(&p.id).await?;
     }
 
-    // Delete saved views from the meta key-value store
+    // Delete saved views from the meta key-value store. Reuse the canonical key
+    // prefix const rather than hardcoding the path, so this stays correct if the
+    // saved-views key layout ever changes.
     let db = infra::db::get_db().await;
-    let prefix = format!("/organization/savedviews/{org_id}/");
-    db.delete(&prefix, true, true, None)
+    let prefix = format!(
+        "{}/{org_id}/",
+        crate::service::db::saved_view::SAVED_VIEWS_KEY_PREFIX
+    );
+    // with_prefix=true (bulk delete all of the org's views); NO_NEED_WATCH matches
+    // saved_view::delete_view — no point emitting watch events for a disappearing org.
+    db.delete(&prefix, true, infra::db::NO_NEED_WATCH, None)
         .await
         .map_err(|e| anyhow::anyhow!("saved_views delete error: {e}"))?;
 
@@ -644,7 +638,13 @@ mod tests {
 
         // Verify required first steps are present
         let steps: Vec<&str> = tasks.iter().map(|t| t.step.as_str()).collect();
-        assert!(steps.contains(&"delete_streams"), "Missing delete_streams step");
-        assert!(steps.contains(&"delete_org_record"), "Missing delete_org_record step");
+        assert!(
+            steps.contains(&"delete_streams"),
+            "Missing delete_streams step"
+        );
+        assert!(
+            steps.contains(&"delete_org_record"),
+            "Missing delete_org_record step"
+        );
     }
 }
