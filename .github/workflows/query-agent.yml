@@ -137,7 +137,7 @@ jobs:
             });
             core.setOutput('comment_id', data.id);
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.prinfo.outputs.author_allowed == 'true'
         with:
           fetch-depth: 1
@@ -249,7 +249,7 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
       - name: Checkout git repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
