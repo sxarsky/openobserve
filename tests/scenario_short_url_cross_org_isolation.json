@@ -1,0 +1,114 @@
+[
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "{\"name\": \"skyramp crossorg 1783455803\"}",
+    "ResponseBody": "{\"identifier\": \"3GBrXampleOrgIdentifier0002\", \"name\": \"skyramp crossorg 1783455803\", \"org_type\": \"custom\", \"service_account\": null}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "POST",
+    "Path": "/api/organizations",
+    "QueryParams": {},
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:37.421Z",
+    "Scheme": "http"
+  },
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "{\"original_url\": \"https://skyramp-cross-1783455803.example.com/isolation\"}",
+    "ResponseBody": "{\"short_url\": \"http://localhost:5080/web/short/712a9d7cf16347a4?org_identifier=default\"}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "POST",
+    "Path": "/api/default/short",
+    "QueryParams": {},
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:37.421Z",
+    "Scheme": "http"
+  },
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "",
+    "ResponseBody": "{}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "GET",
+    "Path": "/api/3GBrXampleOrgIdentifier0002/short/712a9d7cf16347a4",
+    "QueryParams": {
+      "type": [
+        "ui"
+      ]
+    },
+    "StatusCode": 404,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:37.421Z",
+    "Scheme": "http"
+  },
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "",
+    "ResponseBody": "\"https://skyramp-cross-1783455803.example.com/isolation\"",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "GET",
+    "Path": "/api/default/short/712a9d7cf16347a4",
+    "QueryParams": {
+      "type": [
+        "ui"
+      ]
+    },
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:37.421Z",
+    "Scheme": "http"
+  }
+]

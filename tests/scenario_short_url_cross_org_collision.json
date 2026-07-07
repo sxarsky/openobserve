@@ -1,0 +1,80 @@
+[
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "{\"name\": \"skyramp bugcheck 1783455803\"}",
+    "ResponseBody": "{\"identifier\": \"3GBrXampleOrgIdentifier0001\", \"name\": \"skyramp bugcheck 1783455803\", \"org_type\": \"custom\", \"service_account\": null}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "POST",
+    "Path": "/api/organizations",
+    "QueryParams": {},
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:29.217Z",
+    "Scheme": "http"
+  },
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "{\"original_url\": \"https://skyramp-bug-1783455803.example.com/collision\"}",
+    "ResponseBody": "{\"short_url\": \"http://localhost:5080/web/short/aaaaaaaaaaaaaaaa?org_identifier=default\"}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "POST",
+    "Path": "/api/default/short",
+    "QueryParams": {},
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:29.217Z",
+    "Scheme": "http"
+  },
+  {
+    "Source": "192.168.65.1:39998",
+    "Destination": "localhost",
+    "RequestBody": "{\"original_url\": \"https://skyramp-bug-1783455803.example.com/collision\"}",
+    "ResponseBody": "{\"short_url\": \"http://localhost:5080/web/short/bbbbbbbbbbbbbbbb?org_identifier=3GBrXampleOrgIdentifier0001\"}",
+    "RequestHeaders": {
+      "Content-Type": [
+        "application/json"
+      ],
+      "Authorization": [
+        "Basic SKYRAMP_PLACEHOLDER_TOKEN"
+      ]
+    },
+    "ResponseHeaders": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "Method": "POST",
+    "Path": "/api/3GBrXampleOrgIdentifier0001/short",
+    "QueryParams": {},
+    "StatusCode": 200,
+    "Port": 5080,
+    "Timestamp": "2026-07-07T20:24:29.217Z",
+    "Scheme": "http"
+  }
+]
