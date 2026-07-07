@@ -48,4 +48,6 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=8192"
         run: cd web && npm ci && npm run build
       - name: Build SUT binary (release-ci) — seeds the cache
+        env:
+          CARGO_BUILD_JOBS: "2"   # cap parallel rustc to fit a cold build in 16GB (avoid OOM/exit-143)
         run: cargo build --profile release-ci --target x86_64-unknown-linux-gnu
