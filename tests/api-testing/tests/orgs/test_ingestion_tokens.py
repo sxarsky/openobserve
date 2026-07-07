@@ -210,6 +210,78 @@ def test_list_tokens_are_unmasked(client: OpenObserveClient, temp_token: dict):
         pytest.fail(f"token {temp_token['name']} not in list")
 
 
+def test_list_tokens_forbidden_for_non_admin_role(client: OpenObserveClient):
+    """A non-admin/root org member (service_account) is rejected with 403.
+
+    POST /users unconditionally forces every created user to Admin role in
+    OSS builds (see save() in handler/http/request/users/mod.rs, which sets
+    `user.role.base_role = UserRole::Admin` regardless of the requested role
+    under #[cfg(not(feature = "enterprise"))]), so it cannot produce a
+    genuinely non-admin/root identity. POST /service_accounts does not apply
+    that override and always creates a ServiceAccount-role identity, so it is
+    used here instead. Service accounts authenticate with their generated
+    `token` as the Basic auth password.
+    """
+    import base64
+
+    from support.factories import unique_email
+
+    email = unique_email("svcacct")
+    create_resp = client.post(
+        "service_accounts",
+        json={"email": email, "first_name": "skyramp", "last_name": "svcacct"},
+    )
+    assert create_resp.status_code == HTTPStatus.OK, create_resp.text
+    sa_token = create_resp.json().get("token")
+    assert sa_token, f"service account token should be non-empty: {create_resp.text}"
+
+    try:
+        auth = base64.b64encode(f"{email}:{sa_token}".encode()).decode()
+        resp = client.request(
+            "GET",
+            "ingestion-tokens",
+            headers={"Authorization": f"Basic {auth}"},
+        )
+        assert resp.status_code == HTTPStatus.FORBIDDEN, \
+            f"service_account role should be forbidden, got {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert body.get("message") == "Admin or Root role required to list ingestion tokens", \
+            f"unexpected error message: {resp.text}"
+        assert body.get("code") == HTTPStatus.FORBIDDEN, body
+    finally:
+        client.delete(f"service_accounts/{email}")
+
+
+def test_list_tokens_allowed_for_admin_role(client: OpenObserveClient):
+    """A non-root 'admin' org member is still allowed to list tokens (200)."""
+    import base64
+
+    from support.factories import unique_email
+
+    email = unique_email("admin")
+    password = "Testpass#123"
+    create_resp = client.post(
+        "users",
+        json={"email": email, "password": password, "role": "admin"},
+    )
+    assert create_resp.status_code == HTTPStatus.OK, create_resp.text
+    assert create_resp.json().get("message") == "User saved successfully", \
+        create_resp.text
+
+    auth = base64.b64encode(f"{email}:{password}".encode()).decode()
+    resp = client.request(
+        "GET",
+        "ingestion-tokens",
+        headers={"Authorization": f"Basic {auth}"},
+    )
+    assert resp.status_code == HTTPStatus.OK, \
+        f"admin role should be allowed, got {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert "data" in body, f"response missing 'data' field: {body}"
+    assert isinstance(body["data"], list), \
+        f"'data' should be a list, got {type(body['data']).__name__}"
+
+
 # ---------------------------------------------------------------------------
 # 4. Enable / Disable
 # ---------------------------------------------------------------------------
