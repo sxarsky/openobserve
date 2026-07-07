@@ -129,6 +129,7 @@ macro_rules! enterprise_value {
 #[derive(Serialize, serde::Deserialize, ToSchema)]
 pub struct HealthzResponse {
     status: String,
+    service: String,
 }
 
 #[cfg(feature = "enterprise")]
@@ -277,6 +278,7 @@ impl Rum {
 pub async fn healthz() -> impl IntoResponse {
     axum::Json(HealthzResponse {
         status: "ok".to_string(),
+        service: "openobserve".to_string(),
     })
 }
 
@@ -321,6 +323,7 @@ pub async fn schedulez() -> impl IntoResponse {
         code,
         axum::Json(HealthzResponse {
             status: status.to_string(),
+            service: "openobserve".to_string(),
         }),
     )
 }
