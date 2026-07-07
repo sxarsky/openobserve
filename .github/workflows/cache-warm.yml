@@ -7,6 +7,13 @@ name: Cache Warm
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit/branch to build (checkout). Default main."
+        default: "main"
+      toolchain:
+        description: "Rust toolchain to seed (must match the target base's rust-toolchain.toml)."
+        default: "nightly-2026-05-20"
 
 permissions:
   contents: read
@@ -18,13 +25,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2026-05-20
+          toolchain: ${{ inputs.toolchain }}
           targets: x86_64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
         with:
