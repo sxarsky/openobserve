@@ -1,0 +1,40 @@
+# Skyramp Workspace Configuration — OpenObserve replay (HOST-NATIVE SUT).
+# Adapted from Per's proven from-source config; the ONLY substantive change is
+# runtimeDetails.dockerNetwork: <compose-net> -> host, because the SUT now runs
+# NATIVELY on the runner host (localhost:5080), not in a docker-compose network.
+# This is the P0-fix hypothesis: with the SUT on the host and the executor on
+# host networking, the executor reaches localhost:5080 directly (no net mismatch).
+workspace:
+  repoName: sxarsky/openobserve
+  repoUrl: https://github.com/sxarsky/openobserve
+metadata:
+  schemaVersion: v1
+  mcpVersion: latest          # v0.10.7 default (was a stale pin — let it track the action's default)
+  executorVersion: v1.3.30    # v0.10.7 default
+  createdAt: "2026-01-01T00:00:00Z"
+  updatedAt: "2026-01-01T00:00:00Z"
+services:
+  - serviceName: openobserve-backend
+    language: python
+    framework: pytest
+    testDirectory: tests
+    api:
+      schemaPath: http://localhost:5080/api-doc/openapi.json
+      authType: basic
+      authHeader: Authorization
+      authScheme: Basic
+      baseUrl: http://localhost:5080
+    runtimeDetails:
+      runtime: docker
+      dockerNetwork: host        # was eval-24-openobserve_default — host-native SUT
+  - serviceName: openobserve-web
+    language: typescript
+    framework: playwright
+    testDirectory: tests/ui-testing/playwright-tests
+    api:
+      baseUrl: http://localhost:5080/web
+      authType: none
+      authHeader: ""
+    runtimeDetails:
+      runtime: docker
+      dockerNetwork: host        # was eval-24-openobserve_default — host-native SUT
