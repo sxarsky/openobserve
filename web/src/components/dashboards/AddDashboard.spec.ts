@@ -115,7 +115,6 @@ describe("AddDashboard", () => {
     it("should render the create dashboard form by default", () => {
       wrapper = createWrapper();
 
-      expect(wrapper.vm.beingUpdated).toBe(false);
       expect(
         wrapper.find('[data-test="add-dashboard-name"]').exists(),
       ).toBe(true);
@@ -146,11 +145,11 @@ describe("AddDashboard", () => {
   });
 
   describe("Setup & Exposed API", () => {
-    it("should expose submit() helper that delegates to onSubmit.execute", () => {
+    it("should expose submit() helper that delegates to onSubmit", () => {
       wrapper = createWrapper();
 
       expect(typeof wrapper.vm.submit).toBe("function");
-      expect(typeof wrapper.vm.onSubmit.execute).toBe("function");
+      expect(typeof wrapper.vm.onSubmit).toBe("function");
     });
 
     it("should initialise selectedFolder from the active folder", () => {
@@ -181,11 +180,13 @@ describe("AddDashboard", () => {
   });
 
   describe("Form Inputs", () => {
-    it("should initialise dashboard data with empty strings", () => {
+    it("should initialise the form with empty strings", () => {
       wrapper = createWrapper();
 
-      expect(wrapper.vm.dashboardData.name).toBe("");
-      expect(wrapper.vm.dashboardData.description).toBe("");
+      expect(wrapper.vm.addDashboardForm.form.state.values.name).toBe("");
+      expect(wrapper.vm.addDashboardForm.form.state.values.description).toBe(
+        "",
+      );
     });
 
     it("should update dashboardData when inputs change via OForm", async () => {
@@ -223,16 +224,15 @@ describe("AddDashboard", () => {
     });
   });
 
-  // Helper: stub the addDashboardForm ref so submit can pass through validation
-  // and read the supplied values (mirrors what an OForm-driven submission does).
-  const stubFormWith = (
-    name: string,
-    description = "",
-    { valid = true }: { valid?: boolean } = {},
-  ) => {
+  // Helper: stub the addDashboardForm ref so submit() (which now calls
+  // addDashboardForm.value?.submit()) delegates straight to the component's
+  // real onSubmit handler with the supplied values (mirrors what an
+  // OForm-driven submission does once its Zod schema has passed).
+  const stubFormWith = (name: string, description = "") => {
     wrapper.vm.addDashboardForm = {
-      validate: vi.fn().mockResolvedValue(valid),
+      validate: vi.fn().mockResolvedValue(true),
       resetValidation: vi.fn(),
+      submit: () => wrapper.vm.onSubmit({ name, description }),
       form: {
         state: {
           values: { name, description },
@@ -273,18 +273,21 @@ describe("AddDashboard", () => {
       expect(payload).toEqual(["new-dashboard-1", "default"]);
     });
 
-    it("should reset dashboardData after successful submission", async () => {
+    it("should complete the submission successfully with the supplied values", async () => {
       wrapper = createWrapper();
       stubFormWith("Test Dashboard", "Test Description");
 
       await wrapper.vm.submit();
       await flushPromises();
 
-      expect(wrapper.vm.dashboardData).toEqual({
-        id: "",
-        name: "",
-        description: "",
-      });
+      expect(dashboardService.create).toHaveBeenCalledWith(
+        "test-org",
+        expect.objectContaining({
+          title: "Test Dashboard",
+          description: "Test Description",
+        }),
+        "default",
+      );
     });
 
     it("should show a positive notification on success", async () => {
@@ -324,9 +327,10 @@ describe("AddDashboard", () => {
     it("should short-circuit when form validation fails", async () => {
       wrapper = createWrapper();
 
-      // Stub the form ref so validate() resolves false.
-      stubFormWith("Anything", "", { valid: false });
-
+      // Do NOT stub addDashboardForm here — use the real OForm/Zod schema.
+      // The form's default `name` value is empty, and `name` is required by
+      // makeAddDashboardSchema, so submitting through the real form should
+      // fail schema validation and never invoke onSubmit / the create API.
       await wrapper.vm.submit();
       await flushPromises();
 

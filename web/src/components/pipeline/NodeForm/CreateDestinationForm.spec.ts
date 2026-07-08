@@ -363,20 +363,18 @@ describe("CreateDestinationForm", () => {
 
     it("deleteApiHeader removes the specified header", () => {
       wrapper.vm.addApiHeader("X-Test", "test");
-      const toDelete = wrapper.vm.apiHeaders[1];
       const before = wrapper.vm.apiHeaders.length;
 
-      wrapper.vm.deleteApiHeader(toDelete);
+      wrapper.vm.deleteApiHeader(1);
 
       expect(wrapper.vm.apiHeaders).toHaveLength(before - 1);
       expect(
-        wrapper.vm.apiHeaders.find((h: any) => h.uuid === toDelete.uuid)
+        wrapper.vm.apiHeaders.find((h: any) => h.key === "X-Test")
       ).toBeUndefined();
     });
 
     it("deleteApiHeader adds an empty header row when all headers are deleted", () => {
-      const toDelete = wrapper.vm.apiHeaders[0];
-      wrapper.vm.deleteApiHeader(toDelete);
+      wrapper.vm.deleteApiHeader(0);
 
       expect(wrapper.vm.apiHeaders).toHaveLength(1);
       expect(wrapper.vm.apiHeaders[0].key).toBe("");
@@ -485,8 +483,8 @@ describe("CreateDestinationForm", () => {
   describe("canProceedStep2 Validation", () => {
     it("is true for valid openobserve form data", async () => {
       wrapper.vm.formData.destination_type = "openobserve";
-      wrapper.vm.formData.name = "valid-dest";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "valid-dest");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.url_endpoint = "/api/org/stream/_json";
       wrapper.vm.formData.method = "post";
       wrapper.vm.formData.output_format = "json";
@@ -495,23 +493,23 @@ describe("CreateDestinationForm", () => {
     });
 
     it("is false when name is missing", async () => {
-      wrapper.vm.formData.name = "";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       await nextTick();
       expect(wrapper.vm.canProceedStep2).toBeFalsy();
     });
 
     it("is false when URL is missing", async () => {
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "";
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "");
       await nextTick();
       expect(wrapper.vm.canProceedStep2).toBeFalsy();
     });
 
     it("is false for non-custom when url_endpoint is empty", async () => {
       wrapper.vm.formData.destination_type = "openobserve";
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.url_endpoint = "";
       wrapper.vm.formData.method = "post";
       wrapper.vm.formData.output_format = "json";
@@ -521,8 +519,8 @@ describe("CreateDestinationForm", () => {
 
     it("is false for stringseparated when separator is empty", async () => {
       wrapper.vm.formData.destination_type = "custom";
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.method = "post";
       wrapper.vm.formData.output_format = "stringseparated";
       wrapper.vm.formData.separator = "";
@@ -532,8 +530,8 @@ describe("CreateDestinationForm", () => {
 
     it("is true for stringseparated when separator is provided", async () => {
       wrapper.vm.formData.destination_type = "custom";
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.method = "post";
       wrapper.vm.formData.output_format = "stringseparated";
       wrapper.vm.formData.separator = "|";
@@ -543,8 +541,8 @@ describe("CreateDestinationForm", () => {
 
     it("allows single space as a valid separator", async () => {
       wrapper.vm.formData.destination_type = "custom";
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "https://example.com";
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.method = "post";
       wrapper.vm.formData.output_format = "stringseparated";
       wrapper.vm.formData.separator = " ";
@@ -555,24 +553,27 @@ describe("CreateDestinationForm", () => {
 
   // ─────────────────────────────────────────────────────────────────────────────
   describe("isValidDestination computed property", () => {
-    it("is truthy when name, url, and method are provided", () => {
-      wrapper.vm.formData.name = "valid-name";
-      wrapper.vm.formData.url = "https://example.com";
+    it("is truthy when name, url, and method are provided", async () => {
+      wrapper.vm.formRef.form.setFieldValue("name", "valid-name");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.method = "post";
+      await nextTick();
       expect(wrapper.vm.isValidDestination).toBeTruthy();
     });
 
-    it("is falsy when name is empty", () => {
-      wrapper.vm.formData.name = "";
-      wrapper.vm.formData.url = "https://example.com";
+    it("is falsy when name is empty", async () => {
+      wrapper.vm.formRef.form.setFieldValue("name", "");
+      wrapper.vm.formRef.form.setFieldValue("url", "https://example.com");
       wrapper.vm.formData.method = "post";
+      await nextTick();
       expect(wrapper.vm.isValidDestination).toBeFalsy();
     });
 
-    it("is falsy when url is empty", () => {
-      wrapper.vm.formData.name = "test";
-      wrapper.vm.formData.url = "";
+    it("is falsy when url is empty", async () => {
+      wrapper.vm.formRef.form.setFieldValue("name", "test");
+      wrapper.vm.formRef.form.setFieldValue("url", "");
       wrapper.vm.formData.method = "post";
+      await nextTick();
       expect(wrapper.vm.isValidDestination).toBeFalsy();
     });
   });
@@ -716,26 +717,20 @@ describe("CreateDestinationForm", () => {
     it("merges URL and endpoint and calls destinationService.create", async () => {
       (destinationService.create as any).mockResolvedValue({ data: {} });
 
-      wrapper.vm.formData = {
+      wrapper.vm.formData.url_endpoint = "/api/test";
+      wrapper.vm.formData.method = "post";
+      wrapper.vm.formData.output_format = "json";
+      wrapper.vm.formData.destination_type = "openobserve";
+      wrapper.vm.formData.skip_tls_verify = false;
+      wrapper.vm.formData.template = "";
+      wrapper.vm.formData.esbulk_index = "";
+      wrapper.vm.formData.separator = "";
+
+      await wrapper.vm.createDestination({
         name: "Test Destination",
         url: "https://example.com",
-        url_endpoint: "/api/test",
-        method: "post",
-        output_format: "json",
-        destination_type: "openobserve",
-        skip_tls_verify: false,
-        template: "",
-        headers: {},
-        emails: "",
-        type: "http",
-        esbulk_index: "",
-        separator: "",
-      };
-      wrapper.vm.apiHeaders = [
-        { key: "Authorization", value: "Basic token123", uuid: "h1" },
-      ];
-
-      await wrapper.vm.createDestination();
+        headers: [{ key: "Authorization", value: "Basic token123" }],
+      } as any);
       await flushPromises();
 
       expect(destinationService.create).toHaveBeenCalledWith({
@@ -757,26 +752,17 @@ describe("CreateDestinationForm", () => {
     it("includes destination_type_name in payload", async () => {
       (destinationService.create as any).mockResolvedValue({ data: {} });
 
-      wrapper.vm.formData = {
+      wrapper.vm.formData.url_endpoint = "/services/collector";
+      wrapper.vm.formData.method = "post";
+      wrapper.vm.formData.output_format = "nestedevent";
+      wrapper.vm.formData.destination_type = "splunk";
+      wrapper.vm.formData.skip_tls_verify = false;
+
+      await wrapper.vm.createDestination({
         name: "Splunk Dest",
         url: "https://splunk.example.com",
-        url_endpoint: "/services/collector",
-        method: "post",
-        output_format: "nestedevent",
-        destination_type: "splunk",
-        skip_tls_verify: false,
-        template: "",
-        headers: {},
-        emails: "",
-        type: "http",
-        esbulk_index: "",
-        separator: "",
-      };
-      wrapper.vm.apiHeaders = [
-        { key: "Authorization", value: "Splunk token", uuid: "h2" },
-      ];
-
-      await wrapper.vm.createDestination();
+        headers: [{ key: "Authorization", value: "Splunk token" }],
+      } as any);
       await flushPromises();
 
       expect(destinationService.create).toHaveBeenCalledWith(
@@ -792,26 +778,17 @@ describe("CreateDestinationForm", () => {
     it("does not append empty endpoint to base URL for custom type", async () => {
       (destinationService.create as any).mockResolvedValue({ data: {} });
 
-      wrapper.vm.formData = {
+      wrapper.vm.formData.url_endpoint = "";
+      wrapper.vm.formData.method = "post";
+      wrapper.vm.formData.output_format = "json";
+      wrapper.vm.formData.destination_type = "custom";
+      wrapper.vm.formData.skip_tls_verify = false;
+
+      await wrapper.vm.createDestination({
         name: "Custom Dest",
         url: "https://custom.example.com",
-        url_endpoint: "",
-        method: "post",
-        output_format: "json",
-        destination_type: "custom",
-        skip_tls_verify: false,
-        template: "",
-        headers: {},
-        emails: "",
-        type: "http",
-        esbulk_index: "",
-        separator: "",
-      };
-      wrapper.vm.apiHeaders = [
-        { key: "X-Custom", value: "value", uuid: "h3" },
-      ];
-
-      await wrapper.vm.createDestination();
+        headers: [{ key: "X-Custom", value: "value" }],
+      } as any);
       await flushPromises();
 
       expect(destinationService.create).toHaveBeenCalledWith({
@@ -827,12 +804,13 @@ describe("CreateDestinationForm", () => {
     it("emits 'created' event with destination name on success", async () => {
       (destinationService.create as any).mockResolvedValue({ data: {} });
 
-      wrapper.vm.formData.name = "My Dest";
-      wrapper.vm.formData.url = "https://example.com";
       wrapper.vm.formData.url_endpoint = "/api/test";
       wrapper.vm.formData.method = "post";
 
-      await wrapper.vm.createDestination();
+      await wrapper.vm.createDestination({
+        name: "My Dest",
+        url: "https://example.com",
+      } as any);
       await flushPromises();
 
       expect(wrapper.emitted("created")).toBeTruthy();
