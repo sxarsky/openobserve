@@ -368,6 +368,16 @@ describe("PipelineEditor", () => {
       routerPushSpy.mockRestore();
     });
 
+    // NOTE: onBeforeRouteLeave itself (the "Cancel Changes" dialog replacing
+    // window.confirm) is not covered here — driving it requires a real router
+    // navigation away from "/pipeline/pipelines/add", which pulls in
+    // PipelinesList.vue -> PipelineView.vue -> @vue-flow/core, and that module
+    // is not mocked in this spec file. Exercising this guard needs either a
+    // "@vue-flow/core" mock added to this file or extracting the guard's
+    // callback into a directly-callable/exported function. Flagged in the
+    // maintenance report rather than added here to avoid an environment-driven
+    // false failure.
+
     it("confirmSaveBasicPipeline closes the basic dialog and calls onSubmitPipeline", async () => {
       wrapper.vm.confirmDialogBasicPipeline = true;
 

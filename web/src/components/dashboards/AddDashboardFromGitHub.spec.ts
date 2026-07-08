@@ -926,39 +926,43 @@ describe("AddDashboardFromGitHub Component", () => {
     });
   });
 
-  describe("Add Folder ODrawer (nested)", () => {
-    it("should not render the AddFolder drawer by default", async () => {
+  describe("Add Folder ODialog (nested)", () => {
+    it("should not render the AddFolder dialog by default", async () => {
       wrapper = createWrapper({ modelValue: true });
       await flushPromises();
 
-      // There is only the outer ODrawer (gallery) when showAddFolderDialog is false.
+      // The outer gallery is still an ODrawer; the "Select Destination Folder" ODialog
+      // and the nested "Add New Folder" ODialog are both always mounted (open=false),
+      // same pattern as the previous always-mounted ODrawer.
       const drawers = wrapper.findAllComponents({ name: "ODrawer" });
-      expect(drawers).toHaveLength(2); // outer + nested AddFolder drawer always mounted
-      // The nested drawer's open state should be false.
-      const nested = drawers[1];
+      expect(drawers).toHaveLength(1); // outer gallery only
+      const dialogs = wrapper.findAllComponents({ name: "ODialog" });
+      expect(dialogs).toHaveLength(2); // Select Destination Folder + nested Add New Folder
+      const nested = dialogs.find((d: any) => d.props("title") === "Add New Folder");
+      expect(nested).toBeTruthy();
       expect(nested.props("open")).toBe(false);
     });
 
-    it("should open the AddFolder drawer when showAddFolderDialog is true", async () => {
+    it("should open the AddFolder dialog when showAddFolderDialog is true", async () => {
       wrapper = createWrapper({ modelValue: true });
       await flushPromises();
       wrapper.vm.showAddFolderDialog = true;
       await wrapper.vm.$nextTick();
 
-      const drawers = wrapper.findAllComponents({ name: "ODrawer" });
-      const nested = drawers[1];
+      const dialogs = wrapper.findAllComponents({ name: "ODialog" });
+      const nested = dialogs.find((d: any) => d.props("title") === "Add New Folder");
       expect(nested.props("open")).toBe(true);
     });
 
-    it("should close the AddFolder drawer when its close event is emitted", async () => {
+    it("should close the AddFolder dialog when its close event is emitted", async () => {
       wrapper = createWrapper({ modelValue: true });
       await flushPromises();
       wrapper.vm.showAddFolderDialog = true;
       await wrapper.vm.$nextTick();
 
-      const drawers = wrapper.findAllComponents({ name: "ODrawer" });
-      const nested = drawers[1];
-      // The nested ODrawer uses v-model:open, so closing it emits update:open with false.
+      const dialogs = wrapper.findAllComponents({ name: "ODialog" });
+      const nested = dialogs.find((d: any) => d.props("title") === "Add New Folder");
+      // The nested ODialog uses v-model:open, so closing it emits update:open with false.
       await nested.vm.$emit("update:open", false);
       await wrapper.vm.$nextTick();
 
