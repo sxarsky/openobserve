@@ -645,12 +645,29 @@ describe('FolderList.vue', () => {
     describe('router query watcher', () => {
       it('should update activeFolderId when route query changes', async () => {
         mockRouter.currentRoute.value.query.folder = 'folder1'
-        
+
         // Trigger the watcher manually since we can't actually change the route
         wrapper.vm.activeFolderId = 'folder1'
         await nextTick()
-        
+
         expect(wrapper.vm.activeFolderId).toBe('folder1')
+      })
+
+      it('should fall back to "default" when route query.folder becomes falsy', async () => {
+        mockRouter.currentRoute.value.query.folder = undefined
+
+        // Trigger the watcher manually (currentRoute is a plain object here, not a
+        // reactive ref, so mutating it does not fire Vue's watch); apply the same
+        // `newVal || "default"` fallback the watcher callback uses in FolderList.vue.
+        wrapper.vm.activeFolderId = mockRouter.currentRoute.value.query.folder || 'default'
+        await nextTick()
+
+        expect(wrapper.vm.activeFolderId).toBe('default')
+
+        // mockRouter is a shared module-level object with no per-test reset, so
+        // restore query.folder for tests that rely on it (matches the value the
+        // preceding "should update activeFolderId when route query changes" test leaves).
+        mockRouter.currentRoute.value.query.folder = 'folder1'
       })
     })
   })

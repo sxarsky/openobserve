@@ -1241,10 +1241,12 @@ describe("Commons Utility Functions", () => {
 
       (dashboardService.new_Folder as any).mockResolvedValue(mockResponse);
       (dashboardService.list_Folders as any).mockResolvedValue({ data: { list: [] } });
+      (commonService.list_Folders as any).mockResolvedValue({ data: { list: [] } });
 
       const result = await createFolder(mockStore, data);
 
       expect(dashboardService.new_Folder).toHaveBeenCalledWith("test-org", data);
+      expect(commonService.list_Folders).toHaveBeenCalledWith("test-org", "dashboards");
       expect(result).toBe(mockResponse);
     });
 
@@ -1254,10 +1256,12 @@ describe("Commons Utility Functions", () => {
 
       (dashboardService.edit_Folder as any).mockResolvedValue({ success: true });
       (dashboardService.list_Folders as any).mockResolvedValue({ data: { list: [] } });
+      (commonService.list_Folders as any).mockResolvedValue({ data: { list: [] } });
 
       await updateFolder(mockStore, folderId, data);
 
       expect(dashboardService.edit_Folder).toHaveBeenCalledWith("test-org", folderId, data);
+      expect(commonService.list_Folders).toHaveBeenCalledWith("test-org", "dashboards");
     });
 
     it("should delete folder by id", async () => {
