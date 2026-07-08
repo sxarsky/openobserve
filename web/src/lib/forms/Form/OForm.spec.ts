@@ -1,8 +1,9 @@
 // Copyright 2026 OpenObserve Inc.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, VueWrapper, flushPromises } from "@vue/test-utils";
-import { h } from "vue";
+import { h, nextTick } from "vue";
+import { z } from "zod";
 import OForm from "./OForm.vue";
 import OFormInput from "../Input/OFormInput.vue";
 
@@ -37,19 +38,23 @@ describe("OForm", () => {
   });
 
   describe("q-form compatibility ref methods", () => {
-    function mountWithRequiredField(initial = "") {
+    // `validators` was removed from OFormInput — required-field validation is
+    // now expressed via a Zod `:schema` passed to the parent OForm instead.
+    const requiredNameSchema = z.object({
+      name: z.string().min(1, "Required"),
+    });
+
+    function mountWithRequiredField(initial = "", extraProps: Record<string, unknown> = {}) {
       return mount(OForm, {
-        props: { defaultValues: { name: initial } },
+        props: {
+          defaultValues: { name: initial },
+          schema: requiredNameSchema,
+          ...extraProps,
+        },
         slots: {
           default: () =>
             h(OFormInput, {
               name: "name",
-              validators: [
-                (v: unknown) =>
-                  !v || (typeof v === "string" && !v.trim())
-                    ? "Required"
-                    : undefined,
-              ],
             }),
         },
         global: { components: { OFormInput } },
@@ -100,12 +105,19 @@ describe("OForm", () => {
       expect(wrapper.text()).not.toContain("Required");
     });
 
-    it("submit() triggers the @submit event", async () => {
-      wrapper = mountWithRequiredField("Alice");
+    it("submit() invokes the onSubmit prop with the form's value", async () => {
+      const onSubmitSpy = vi.fn();
+      wrapper = mountWithRequiredField("Alice", { onSubmit: onSubmitSpy });
+      // Let the OFormInput's `form.Field` finish registering before submitting.
+      await nextTick();
       const vm = wrapper.vm as unknown as { submit: () => void };
       vm.submit();
-      await flushPromises();
-      expect(wrapper.emitted("submit")).toBeTruthy();
+      // submit() is fire-and-forget (form.handleSubmit() isn't awaited by the
+      // caller) and schema validation resolves over several microtask/tick
+      // hops, so poll instead of guessing a fixed number of flushes.
+      await vi.waitFor(() => {
+        expect(onSubmitSpy).toHaveBeenCalledWith({ name: "Alice" });
+      });
     });
 
     it("reset() emits the reset event", async () => {
