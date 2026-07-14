@@ -1658,7 +1658,7 @@
   "logStream": {
     "header": "Streams",
     "subtitle": "Index management and stream configuration",
-    "streamNameHelpText": "Use alphanumeric characters, underscore and colon only.",
+    "streamNameHelpText": "Use only letters, numbers, underscores and colons.",
     "search": "Search Stream",
     "emptyOr": "Or:",
     "emptyKubernetes": "Kubernetes",
