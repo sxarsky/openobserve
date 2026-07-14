@@ -1,0 +1,105 @@
+name: Skyramp Testbot
+
+# Installer-generated v0.10.7 App-token config + HOST-NATIVE OpenObserve SUT setup.
+# UI TEST-MAINTENANCE probe variant: maxGenerate low (maintenance, not generation),
+# generatedTestsMode same-branch (bypass the separate-branch git-stash-pop delivery bug).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.actor != 'skyramp-testbot[bot]' }}
+
+# OpenObserve runtime config — mirrors upstream .github/workflows/playwright.yml.
+env:
+  ZO_ROOT_USER_EMAIL: root@example.com
+  ZO_ROOT_USER_PASSWORD: Complexpass#123
+  ZO_BASE_URL: http://localhost:5080
+  ZO_WEB_URL: "http://localhost:5080"
+  ZO_ALLOW_USER_DEFINED_SCHEMAS: true
+  ZO_CREATE_ORG_THROUGH_INGESTION: true
+  ZO_SSRF_ALLOW_LOOPBACK: true
+
+jobs:
+  testbot:
+    if: >-
+      (github.event_name == 'pull_request' && github.actor != 'skyramp-testbot[bot]' && !startsWith(github.head_ref, 'skyramp-testbot/')) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@skyramp-testbot') && github.event.comment.user.login != 'skyramp-testbot[bot]')
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+
+    steps:
+      - name: Generate GitHub App Token
+        id: skyramp-testbot-app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.SKYRAMP_TESTBOT_APP_ID }}
+          private-key: ${{ secrets.SKYRAMP_TESTBOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.skyramp-testbot-app-token.outputs.token }}
+
+      # ---- Host-native SUT build (mirrors upstream playwright.yml) ----
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc "/usr/local/share/boost" "$AGENT_TOOLSDIRECTORY" || true
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-05-20
+          targets: x86_64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: testbot-replay-release-ci
+
+      - name: Install protoc
+        run: bash ./.github/protoc.sh
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Build frontend (embedded into binary via rust-embed)
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+        run: cd web && npm ci && npm run build
+
+      - name: Build SUT binary (release-ci)
+        env:
+          GIT_HASH_OVERRIDE: ${{ github.sha }}
+        run: cargo build --profile release-ci --target x86_64-unknown-linux-gnu
+
+      # UI-exec mitigation: open docker bridge -> host so the Playwright executor
+      # container can reach the host SUT via host.docker.internal:5080.
+      - name: Open docker bridge to host (UI executor reachability)
+        run: |
+          sudo iptables -I INPUT 1 -i docker0 -j ACCEPT 2>/dev/null || true
+          sudo iptables -I FORWARD 1 -i docker0 -j ACCEPT 2>/dev/null || true
+          sudo sysctl -w net.ipv4.ip_forward=1 2>/dev/null || true
+
+      # ---- Run TestBot against the host-native SUT ----
+      - uses: skyramp/testbot@89f8cd799fdbf8ff762568873f52dacab5d3e23f # v0.10.7
+        with:
+          skyrampLicenseFile: ${{ secrets.SKYRAMP_LICENSE_FILE }}
+          anthropicApiKey: ${{ secrets.SKYRAMP_TESTBOT_API_KEY }}
+          githubToken: ${{ steps.skyramp-testbot-app-token.outputs.token }}
+          targetSetupCommand: './deployment-testbot/setup.sh'
+          targetReadyCheckCommand: 'curl -sf http://localhost:5080/web/login'
+          authTokenCommand: './deployment-testbot/get-token.sh'
+          uiCredentials: 'root@example.com:Complexpass#123'
+          # Maintenance probe: low generation ceiling; commit repairs to the same branch
+          # (bypasses the separate-branch git-stash-pop delivery bug).
+          maxGenerate: "3"
+          generatedTestsMode: same-branch
